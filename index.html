@@ -188,6 +188,7 @@
   .owe { font-size: 2.3rem; font-weight: 900; font-stretch: 125%; letter-spacing: -.01em; line-height: 1; font-variant-numeric: tabular-nums; }
   .owe-d { font-size: .82rem; font-weight: 500; overflow-wrap: anywhere; opacity: .92; margin-top: 2px; }
   .copy { background: #101a33; color: #fdf6e4; min-height: 48px; padding: 0 16px; }
+  .copy:disabled { background: transparent; color: var(--on-red); box-shadow: inset 0 0 0 2px var(--on-red); opacity: .55; }
 
   @media (max-width: 380px) { header { padding-left: 12%; } .pie { width: 48px; height: 48px; } .owe { font-size: 1.9rem; } }
   @media (prefers-reduced-motion: reduce) {
@@ -771,7 +772,7 @@ Rules:
   // Turns OCR text from a receipt into {merchant, symbol, items, extras, billTotal}.
   function parseReceipt(text) {
     const PRICE = /([-−–]?)\s*([£€$])?\s*(\d{1,4}(?:[ ,]\d{3})*[.,]\s?\d{2})(?!\d)/g;
-    const SKIP = /\b(sub\s*-?\s*total|net|vat|tax\s*incl|incl\.?\s*vat|card|visa|master\s*card|mastercard|amex|maestro|debit|credit|contactless|cash|change|tender(ed)?|paid|payment|auth|approved|balance\s*(brought|b\/f)|rounding|before\s*sav|savings?\b|covers?|table|server|receipt|invoice|tel\b|phone|www\.|thank)/i;
+    const SKIP = /\b(sub\s*-?\s*total|net|vat|tax\s*incl|incl\.?\s*vat|card|visa|master\s*card|mastercard|amex|maestro|debit|credit|contactless|cash|change|tender(ed)?|paid|payment|auth|approved|balance\s*(brought|b\/f)|rounding|before\s*sav|number|\bno\s*[:.#]|reg(istration|\.)?\s*(no|number)?\b|[uv]at\s*(no|reg|number|#)|order\s*(no|#|id)|trans(action)?\b|ref\b|terminal|merchant\s*id|savings?\b|covers?|table|server|receipt|invoice|tel\b|phone|www\.|thank)/i;
     const TOTAL = /\b(grand\s*total|total\s*(due|to\s*pay)?|amount\s*due|balance\s*due|to\s*pay|bill\s*total)\b/i;
     const SERVICE = /\b(service|serv\.?\s*ch|svc|optional\s*charge)\b/i;
     const TIP = /\b(tip|gratuity)\b/i;
@@ -813,7 +814,7 @@ Rules:
         // Possible item name whose price is on the next line, or a modifier line
         if (letters(t) >= 2 && !SKIP.test(t) && !TOTAL.test(t)) {
           const tidy = t.replace(/\s/g, "");
-          const wordy = tidy.length >= 3 && letters(t) / tidy.length >= 0.8 && t.length <= 40;
+          const wordy = tidy.length >= 3 && letters(t) / tidy.length >= 0.8 && t.length <= 28 && !/[,;:]/.test(t) && t.split(/\s+/).length <= 4;
           if (seenItem && wordy && /^\s{2,}\S|^[\s\-+*]*(no|add|extra|with|without|sub|side|w\/)\b/i.test(line) && items.length) {
             const last = items[items.length - 1];
             if (last.name.length < 60) last.name += " (" + t.replace(/^[\-+*\s]+/, "") + ")";
@@ -838,6 +839,7 @@ Rules:
         .replace(/^[^A-Za-z0-9]+/, "")
         .replace(/(\s+[^A-Za-z0-9\s]{1,2})+$/, "");
       if (starred) name = name.replace(/^x{1,3}(?=[A-Z])/, "").replace(/(?<=\S)x{1,3}$/, "").trim();
+      name = name.replace(/^[Il|!]\s+(?=\d)/, "");
       const lead = name.match(/^(\d{1,2})\s*[xX×]?\s+(?=[A-Za-z])/);
       if (lead) { qty = +lead[1]; name = name.slice(lead[0].length); }
       const trail = name.match(/\s[xX×]\s?(\d{1,2})$/);
@@ -862,7 +864,12 @@ Rules:
       items.push({ name: cap(name), qty, total: Math.round(value * 100) / 100 });
       seenItem = true;
     }
-    if (!seenItem) merchant = merchant || "";
+    const sorted = items.map((i) => i.total).sort((a, b) => a - b);
+    const median = sorted.length ? sorted[sorted.length >> 1] : 0;
+    for (let k = items.length - 1; k >= 0; k--) {
+      const t = items[k].total;
+      if ((billTotal != null && t > billTotal + 0.01) || (items.length >= 3 && t > 100 && t > median * 15)) items.splice(k, 1);
+    }
     return { merchant, symbol, items, extras, billTotal };
   }
 
