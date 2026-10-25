@@ -1,5 +1,5 @@
 // Offline support: keeps the app and its text reader on the phone after first use.
-const CACHE = "splitsville-v13";
+const CACHE = "splitsville-v14";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -20,4 +20,8 @@ Lay the receipt flat in good light, shoot straight on, and let it fill most of t
 
 ## How it works
 
-A single static page (`index.html`) with on-device text recognition by [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), bundled in `ocr/`. No server, no build step.
+A single static page (`index.html`), no server and no build step. Everything runs on the phone:
+
+- **Reading the receipt:** [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) PP-OCRv5 mobile models (Apache 2.0) via the PaddleOCR.js SDK and ONNX Runtime Web, bundled in `paddle/`. The first scan downloads about 25 MB once; after that it works offline.
+- **Fallback:** if PaddleOCR can't run on a device, [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0) in `ocr/` takes over.
+- **Checking:** the printed total is used as a checksum, and the app flags when the lines don't add up.

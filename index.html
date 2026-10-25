@@ -257,7 +257,7 @@
     </details>
     <button class="link" id="clearSel" type="button" hidden>Clear my items</button>
   </div>
-  <p class="ver">Splitsville · version 13</p>
+  <p class="ver">Splitsville · version 14</p>
   <textarea class="copy-fallback" id="copyFallback" readonly hidden aria-label="Your share, as text"></textarea>
 </div>
 
@@ -710,7 +710,63 @@ Rules:
   };
   const PERMANENT = ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed", "images_unavailable"];
 
-  /* Free reader: runs on the phone, no Claude usage */
+  /* Main free reader: PaddleOCR, on the phone. Switched on where its files are published. */
+  const USE_PADDLE = true;
+  let paddleOcr = null, paddleLoading = null, paddleBroken = false;
+  const paddleReady = () => { try { return localStorage.getItem("splitsville:paddle") === "1"; } catch (_) { return false; } };
+  async function getPaddle() {
+    if (paddleOcr) return paddleOcr;
+    if (!paddleLoading) paddleLoading = (async () => {
+      if (!window.PaddleOCR) await loadScript("paddle/paddle.js");
+      const abs = (f) => new URL(f, document.baseURI).href;
+      const o = await PaddleOCR.create({
+        textDetectionModelName: "PP-OCRv5_mobile_det", textDetectionModelAsset: { url: abs("paddle/models/det.tar") },
+        textRecognitionModelName: "PP-OCRv5_mobile_rec", textRecognitionModelAsset: { url: abs("paddle/models/rec.tar") },
+        ortOptions: { backend: "wasm", wasmPaths: abs("paddle/ort/"), numThreads: 1 }
+      });
+      try { localStorage.setItem("splitsville:paddle", "1"); } catch (_) {}
+      return o;
+    })();
+    try { paddleOcr = await paddleLoading; } finally { paddleLoading = null; }
+    return paddleOcr;
+  }
+  // Reads one photo and rebuilds the receipt's lines from PaddleOCR's text boxes
+  async function paddleLines(ocr, img, box) {
+    const long = Math.max(box.sw, box.sh), k = Math.min(1, 2400 / long);
+    const cw = Math.max(1, Math.round(box.sw * k)), ch = Math.max(1, Math.round(box.sh * k));
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+    c.getContext("2d").putImageData(new ImageData(resampleCrop(img.px, img.w, img.h, box, cw, ch), cw, ch), 0, 0);
+    const [res] = await ocr.predict(c, { textDetLimitSideLen: 1600, textDetLimitType: "max", textDetBoxThresh: 0.5, textDetUnclipRatio: 1.6 });
+    const W = cw;
+    const boxes = (res && res.items ? res.items : []).map((it) => {
+      const xs = it.poly.map((q) => q[0]), ys = it.poly.map((q) => q[1]);
+      const b = { text: String(it.text || ""), score: it.score || 0, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+      b.cy = (b.y0 + b.y1) / 2; b.h = b.y1 - b.y0; return b;
+    });
+    // Prices on the right are matched to text lines afterwards, one price per line
+    const isPrice = (b) => b.x0 > W * 0.45 && /[-−]?\s*[£€$EF]?\s*\d{1,4}[.,:]\d{2}\d{0,2}\s*[<>A-Z*]?$/.test(b.text.trim());
+    const prices = boxes.filter(isPrice), others = boxes.filter((b) => !isPrice(b)).sort((a, b) => a.cy - b.cy);
+    const lines = [];
+    for (const b of others) {
+      const L = lines.find((l) => Math.abs(l.cy - b.cy) < Math.min(l.h, b.h) * 0.35);
+      if (L) { L.boxes.push(b); L.cy = (L.cy * (L.boxes.length - 1) + b.cy) / L.boxes.length; }
+      else lines.push({ cy: b.cy, h: b.h, boxes: [b], price: null });
+    }
+    const pairs = [];
+    for (const q of prices) for (const l of lines) { const d = Math.abs(q.cy - l.cy); if (d < Math.max(q.h, l.h) * 1.2) pairs.push({ q, l, d }); }
+    pairs.sort((a, b) => a.d - b.d);
+    const used = new Set();
+    for (const { q, l } of pairs) if (!used.has(q) && !l.price) { l.price = q; used.add(q); }
+    for (const q of prices) if (!used.has(q)) lines.push({ cy: q.cy, h: q.h, boxes: [], price: q });
+    lines.sort((a, b) => a.cy - b.cy);
+    return lines.map((l) => {
+      l.boxes.sort((a, b) => a.x0 - b.x0);
+      const all = l.price ? [...l.boxes, l.price] : l.boxes;
+      return { text: all.map((b) => b.text).join("    "), conf: 100 * Math.min(...all.map((b) => b.score)) };
+    });
+  }
+
+  /* Fallback free reader: Tesseract, also on the phone */
   let ocrWorker = null, ocrLoading = null, cancelled = false, lastFiles = [];
   const TESS = "ocr/";
   function loadScript(src) {
@@ -866,7 +922,9 @@ Rules:
     let billTotal = null, merchant = "", pendingName = "", seenItem = false, afterTotal = false;
 
     for (let li = 0; li < raw.length; li++) {
-      const line = raw[li].replace(/([£€$]\s?\d{1,4})\s?:\s?(\d{2})(?!\d)/g, "$1.$2");
+      const line = raw[li]
+        // "-02.7501" / "-00.6000": a minus, a £ misread as 0, the amount, then column noise
+        .replace(/([-−–])\s*0?(\d{1,3})[.,](\d{2})\d{1,2}\s*$/, "$1£$2.$3").replace(/(^|\s)[EF€]\s?(\d{1,4}[.,:]\d{2})(?=\s*[<>A-Z*]?\s*$)/, "$1£$2").replace(/([£€$]\s?\d{1,4})\s?:\s?(\d{2})(?!\d)/g, "$1.$2");
       if (!line.trim()) continue;
       const matches = [...line.matchAll(PRICE)];
       if (!matches.length) {
@@ -896,6 +954,7 @@ Rules:
       const starred = /\*/.test(label);
       let name = clean(label.replace(/\s[A-Z]$/, ""))
         .replace(/^[^A-Za-z0-9]+/, "")
+        .replace(/^.*?(^|\s)\d{6,}\s+(?=\S)/, "")
         .replace(/^\d{5,}\s*/, "")
         .replace(/^[^A-Za-z0-9]+/, "")
         .replace(/(\s+[^A-Za-z0-9\s]{1,2})+$/, "");
@@ -1246,6 +1305,37 @@ Rules:
       const bitmaps = [];
       for (const f of files) { const bmp = await loadBitmap(f); bitmaps.push(decodeFull(bmp)); if (bmp.close) bmp.close(); }
       const boxes = bitmaps.map(paperBox);
+      if (USE_PADDLE && !paddleBroken) {
+        let ocr = null;
+        try {
+          if (!paddleReady()) $("#scanS").textContent = "Downloading the reader, one time only (about 25 MB)";
+          ocr = await getPaddle();
+        } catch (err) {
+          paddleBroken = true;
+          try { console.error("PaddleOCR unavailable, using fallback", err && (err.stack || err.message || err)); } catch (_) {}
+        }
+        if (ocr && !cancelled) {
+          $("#scanS").textContent = "Reading the bill";
+          let lines = [];
+          for (let k = 0; k < bitmaps.length; k++) {
+            if (cancelled) return;
+            lines = lines.concat(await paddleLines(ocr, bitmaps[k], boxes[k]));
+          }
+          if (cancelled) return;
+          const merged = mergeReadings([parseReceipt(lines)]);
+          if (merged && merged.items.length) {
+            bill = normalise(merged);
+            editing = false;
+            showPhotos(files);
+            render();
+            setNote(merged.off <= 0.02 || !Number.isFinite(merged.off)
+              ? found()
+              : found() + " Some lines don't add up to the bill total, so a few may be misread.", false);
+            return;
+          }
+          // Nothing usable: fall through to the other reader
+        }
+      }
       const w = await getWorker();
       // Six readings: three sizes, two ways of turning colour into grey. Each catches lines the others miss.
       const passes = [[1100, "max"], [1100, "avg"], [1400, "max"], [900, "avg"], [900, "max"], [1400, "avg"]];
@@ -1352,6 +1442,7 @@ Rules:
   })();
 
   if (!bill.example) setNote("Your last bill is below. Tick the items you had, or take a new photo to replace it.", false);
+  if (USE_PADDLE && !paddleReady()) $("#note").textContent += " The first scan downloads the reader once (about 25 MB), so Wi-Fi is best.";
   render();
 })();
 </script>
