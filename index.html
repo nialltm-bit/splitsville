@@ -771,7 +771,11 @@ Rules:
 
 
   // Turns OCR text from a receipt into {merchant, symbol, items, extras, billTotal}.
-  function parseReceipt(text) {
+  function parseReceipt(input) {
+    const lineObjs = Array.isArray(input)
+      ? input.map((l) => ({ text: String(l.text || "").replace(/\n+$/, ""), conf: +l.conf || 0 }))
+      : String(input).split(/\r?\n/).map((t) => ({ text: t, conf: 100 }));
+    const text = lineObjs.map((l) => l.text).join("\n");
     const PRICE = /([-−–]?)\s*([£€$])?\s*(\d{1,4}(?:[ ,]\d{3})*[.,]\s?\d{2})(?!\d)/g;
     const SKIP = /\b(sub\s*-?\s*total|net|vat|tax\s*incl|incl\.?\s*vat|card|visa|master\s*card|mastercard|amex|maestro|debit|credit|contactless|cash|change|tender(ed)?|paid|payment|auth|approved|balance\s*(brought|b\/f)|rounding|before\s*sav|number|\bno\s*[:.#]|reg(istration|\.)?\s*(no|number)?\b|[uv]at\s*(no|reg|number|#)|order\s*(no|#|id)|trans(action)?\b|ref\b|terminal|merchant\s*id|savings?\b|covers?|table|server|receipt|invoice|tel\b|phone|www\.|thank)/i;
     const TOTAL = /\b(grand\s*total|total\s*(due|to\s*pay)?|amount\s*due|balance\s*due|to\s*pay|bill\s*total)\b/i;
@@ -801,7 +805,9 @@ Rules:
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     const letters = (s) => (s.match(/[A-Za-z]/g) || []).length;
 
-    const raw = text.split(/\r?\n/).map((l) => l.replace(/\s+$/, ""));
+    const raw = lineObjs.map((l) => l.text.replace(/\s+$/, ""));
+    const confs = lineObjs.map((l) => l.conf);
+    let pendingConf = 100;
     const items = [], extras = [];
     let subtotal = null, paid = null;
     let billTotal = null, merchant = "", pendingName = "", seenItem = false, afterTotal = false;
@@ -821,7 +827,7 @@ Rules:
             const last = items[items.length - 1];
             if (last.name.length < 60) last.name += " (" + t.replace(/^[\-+*\s]+/, "") + ")";
             pendingName = "";
-          } else pendingName = t;
+          } else { pendingName = t; pendingConf = confs[li]; }
         } else pendingName = "";
         continue;
       }
@@ -841,12 +847,13 @@ Rules:
         .replace(/^[^A-Za-z0-9]+/, "")
         .replace(/(\s+[^A-Za-z0-9\s]{1,2})+$/, "");
       if (starred) name = name.replace(/^x{1,3}(?=[A-Z])/, "").replace(/(?<=\S)x{1,3}$/, "").trim();
-      name = name.replace(/^[Il|!]\s+(?=\d)/, "");
+      name = name.replace(/^[Il|!]\s+(?=\d)/, "").replace(/^\d\s+(?=\d{1,2}\s+[A-Za-z])/, "");
       const lead = name.match(/^(\d{1,2})\s*[xX×]?\s+(?=[A-Za-z])/);
       if (lead) { qty = +lead[1]; name = name.slice(lead[0].length); }
       const trail = name.match(/\s[xX×]\s?(\d{1,2})$/);
       if (trail) { qty = +trail[1]; name = name.slice(0, trail.index); }
-      if (letters(name) < 2 && pendingName) { name = pendingName; }
+      let conf = confs[li];
+      if (letters(name) < 2 && pendingName) { name = pendingName; conf = Math.min(conf, pendingConf); }
       pendingName = "";
       name = clean(name);
       if (!Number.isFinite(value)) continue;
@@ -867,7 +874,7 @@ Rules:
       if (SKIP.test(name)) continue;
       if (TAXADD.test(name) && seenItem) { extras.push({ name, amount: value, kind: "tax" }); continue; }
       if (letters(name) < 2 || value === 0) continue;
-      items.push({ name: cap(name), qty, total: Math.round(value * 100) / 100 });
+      items.push({ conf, name: cap(name), qty, total: Math.round(value * 100) / 100 });
       seenItem = true;
     }
     // No "Total" line: fall back to what was paid, then to subtotal plus charges
@@ -882,6 +889,42 @@ Rules:
       if ((billTotal != null && (t > billTotal + 0.01 || (items.length > 1 && t >= billTotal - 0.01))) || (items.length >= 3 && t > 100 && t > median * 15)) items.splice(k, 1);
     }
     return { merchant, symbol, items, extras, billTotal };
+  }
+
+
+  // Combines several readings of the same receipt. Starts from the reading that
+  // best matches the printed total, then, line by line, swaps in the name from
+  // another reading when the reader was clearly more confident about it.
+  function mergeReadings(readings) {
+    const score = (r) => {
+      const sum = r.items.reduce((a, i) => a + i.total, 0) + r.extras.reduce((a, e) => a + e.amount, 0);
+      return r.billTotal != null ? Math.abs(sum - r.billTotal) : Infinity;
+    };
+    let best = null, bestOff = Infinity;
+    for (const r of readings) {
+      const off = score(r);
+      if (!best || off < bestOff - 0.02 || (Math.abs(off - bestOff) <= 0.02 && r.items.length > best.items.length)) { best = r; bestOff = off; }
+    }
+    if (!best) return null;
+    const base = { ...best, items: best.items.map((i) => ({ ...i })) };
+    const cents = (v) => Math.round(v * 100);
+    for (const other of readings) {
+      if (other === best) continue;
+      const A = base.items, B = other.items, n = A.length, m = B.length;
+      // Longest common subsequence on price, so lines pair up in order
+      const L = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+      for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+        L[i][j] = cents(A[i].total) === cents(B[j].total) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+      let i = 0, j = 0;
+      while (i < n && j < m) {
+        if (cents(A[i].total) === cents(B[j].total)) {
+          if ((B[j].conf || 0) > (A[i].conf || 0) + 5) { A[i].name = B[j].name; A[i].qty = B[j].qty; A[i].conf = B[j].conf; }
+          i++; j++;
+        } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++;
+      }
+    }
+    base.off = bestOff;
+    return base;
   }
 
   // Finds the receipt paper in a photo. px: RGBA bytes at a small analysis size.
@@ -976,24 +1019,26 @@ Rules:
       const boxes = bitmaps.map(paperBox);
       const w = await getWorker();
       const sizes = [1100, 900, 1400];
-      let best = null;
+      const readings = [];
       for (let p = 0; p < sizes.length; p++) {
         passLabel = p ? `Double-checking (${p + 1} of ${sizes.length})` : "Reading text";
-        let text = "";
+        let lines = [];
         for (let k = 0; k < bitmaps.length; k++) {
           if (cancelled) return;
           const { data } = await w.recognize(renderCrop(bitmaps[k], boxes[k], sizes[p]));
-          text += data.text + "\n";
+          lines = lines.concat((data.lines || []).map((l) => ({ text: l.text, conf: l.confidence })));
+          if (!data.lines || !data.lines.length) lines = lines.concat(String(data.text || "").split("\n").map((t) => ({ text: t, conf: 50 })));
         }
         if (cancelled) return;
-        const r = parseReceipt(text);
+        const r = parseReceipt(lines);
+        readings.push(r);
+        // Stop early only when this reading adds up and every line was read confidently
         const sum = r.items.reduce((a, i) => a + i.total, 0) + r.extras.reduce((a, e) => a + e.amount, 0);
-        const off = r.billTotal != null ? Math.abs(sum - r.billTotal) : Infinity;
-        const cand = { r, off, n: r.items.length };
-        if (!best || cand.off < best.off - 0.02 || (Math.abs(cand.off - best.off) <= 0.02 && cand.n > best.n)) best = cand;
-        if (best.off <= 0.02) break;
-        if (r.billTotal == null && best.n >= 2) break; // nothing to check against
+        const sure = r.items.length && r.items.every((i) => (i.conf || 0) >= 85);
+        if (r.billTotal != null && Math.abs(sum - r.billTotal) <= 0.02 && sure) break;
       }
+      const merged = mergeReadings(readings);
+      const best = merged ? { r: merged, off: merged.off } : null;
       if (!best || !best.r.items.length) throw { code: "no_items" };
       bill = normalise(best.r);
       editing = false;
