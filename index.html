@@ -257,7 +257,7 @@
     </details>
     <button class="link" id="clearSel" type="button" hidden>Clear my items</button>
   </div>
-  <p class="ver">Splitsville · version 11</p>
+  <p class="ver">Splitsville · version 13</p>
   <textarea class="copy-fallback" id="copyFallback" readonly hidden aria-label="Your share, as text"></textarea>
 </div>
 
@@ -748,38 +748,79 @@ Rules:
     try { return await createImageBitmap(file, { imageOrientation: "from-image" }); }
     catch (_) { return await createImageBitmap(file); }
   }
-  function paperBox(bmp) {
-    const s = Math.min(1, 600 / Math.max(bmp.width, bmp.height));
+  // Decode the photo once at full size; all resizing after this is the app's own code,
+  // so every phone and browser hands the reader exactly the same pixels.
+  function decodeFull(bmp) {
+    let w = bmp.width, h = bmp.height;
+    const cap = 13e6;
+    if (w * h > cap) { const k = Math.sqrt(cap / (w * h)); w = Math.round(w * k); h = Math.round(h * k); }
     const c = document.createElement("canvas");
-    c.width = Math.max(1, Math.round(bmp.width * s)); c.height = Math.max(1, Math.round(bmp.height * s));
-    const g = c.getContext("2d", { willReadFrequently: true });
-    g.drawImage(bmp, 0, 0, c.width, c.height);
-    const r = findPaper(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
-    return { sx: r.x * bmp.width, sy: r.y * bmp.height, sw: r.w * bmp.width, sh: r.h * bmp.height };
-  }
-  function renderCrop(bmp, box, width, mode) {
-    let h = Math.round(box.sh * width / box.sw);
-    if (h > 12000) { width = Math.round(width * 12000 / h); h = 12000; }
-    const c = document.createElement("canvas");
-    c.width = width; c.height = h;
+    c.width = w; c.height = h;
     const g = c.getContext("2d", { willReadFrequently: true });
     g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-    // Shrink in halves first: one big downscale makes text jagged (5s read as 9s)
-    let src = bmp, sx = box.sx, sy = box.sy, sw = box.sw, sh = box.sh;
-    while (sw > width * 2) {
-      const t = document.createElement("canvas");
-      t.width = Math.round(sw / 2); t.height = Math.round(sh / 2);
-      const tg = t.getContext("2d");
-      tg.imageSmoothingEnabled = true; tg.imageSmoothingQuality = "high";
-      tg.drawImage(src, sx, sy, sw, sh, 0, 0, t.width, t.height);
-      src = t; sx = 0; sy = 0; sw = t.width; sh = t.height;
-    }
-    g.drawImage(src, sx, sy, sw, sh, 0, 0, width, h);
-    const id = g.getImageData(0, 0, width, h);
-    stretchGray(id.data, mode);
-    g.putImageData(id, 0, 0);
+    g.drawImage(bmp, 0, 0, w, h);
+    return { px: g.getImageData(0, 0, w, h).data, w, h };
+  }
+  function paperBox(img) {
+    const s = Math.min(1, 600 / Math.max(img.w, img.h));
+    const aw = Math.max(1, Math.round(img.w * s)), ah = Math.max(1, Math.round(img.h * s));
+    const small = resampleCrop(img.px, img.w, img.h, { sx: 0, sy: 0, sw: img.w, sh: img.h }, aw, ah);
+    const r = findPaper(small, aw, ah);
+    return { sx: r.x * img.w, sy: r.y * img.h, sw: r.w * img.w, sh: r.h * img.h };
+  }
+  function renderCrop(img, box, width, mode) {
+    let h = Math.round(box.sh * width / box.sw);
+    if (h > 12000) { width = Math.round(width * 12000 / h); h = 12000; }
+    const px = resampleCrop(img.px, img.w, img.h, box, width, h);
+    stretchGray(px, mode);
+    const c = document.createElement("canvas");
+    c.width = width; c.height = h;
+    c.getContext("2d").putImageData(new ImageData(px, width, h), 0, 0);
+    c._px = px;
     return c;
   }
+
+  // Second look at prices: crop each price, enlarge it, and re-read it expecting digits only.
+  const PRICE_WORD = /^[-−–]?[£€$]?\d{1,4}[.,:]\d{2}[<>A-Z*]?$/;
+  async function refinePrices(w, canvas, data) {
+    const lines = data.lines || [];
+    const jobs = [];
+    for (const l of lines) {
+      const words = l.words || [];
+      for (let k = words.length - 1; k >= 0; k--) {
+        const t = words[k].text.replace(/[^\d.,:£€$\-−–<>A-Z*]/g, "");
+        if (PRICE_WORD.test(t) || /\d[.,:]\d/.test(words[k].text)) { jobs.push({ l, word: words[k] }); break; }
+      }
+    }
+    if (!jobs.length) return;
+    await w.setParameters({ tessedit_pageseg_mode: "7", tessedit_char_whitelist: "0123456789.£-" });
+    try {
+      for (const j of jobs) {
+        const b = j.word.bbox, pad = Math.round((b.y1 - b.y0) * 0.35);
+        const box = { sx: Math.max(0, b.x0 - pad), sy: Math.max(0, b.y0 - pad), sw: 0, sh: 0 };
+        box.sw = Math.min(canvas.width, b.x1 + pad) - box.sx; box.sh = Math.min(canvas.height, b.y1 + pad) - box.sy;
+        if (box.sw < 4 || box.sh < 4) continue;
+        const th = 64, tw = Math.max(8, Math.round(box.sw * th / box.sh));
+        const crop = resampleCrop(canvas._px, canvas.width, canvas.height, box, tw, th);
+        const c = document.createElement("canvas"); c.width = tw; c.height = th;
+        c.getContext("2d").putImageData(new ImageData(crop, tw, th), 0, 0);
+        const { data: d } = await w.recognize(c);
+        const got = String(d.text || "").replace(/\s/g, "");
+        const m = got.match(/(-?)£?(\d{1,4})\.(\d{2})$/);
+        if (!m || (d.confidence || 0) < 55) continue;
+        const orig = j.word.text;
+        const om = orig.match(/(\d{1,4})[.,:](\d{2})/);
+        if (!om) continue;
+        // keep the original's length; only trust a re-read that agrees on the pounds part
+        if (om[1].replace(/^0+/, "") !== m[2].replace(/^0+/, "") && om[1].length !== m[2].length) continue;
+        const fixed = orig.replace(om[0], m[2] + "." + m[3]);
+        if (fixed !== orig) j.l.text = j.l.text.replace(orig, fixed);
+      }
+    } finally {
+      await w.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
+    }
+  }
+
 
 
   // Turns OCR text from a receipt into {merchant, symbol, items, extras, billTotal}.
@@ -925,6 +966,14 @@ Rules:
       }
       return prev[n];
     };
+    const DIG = { "3": "89", "8": "3069", "9": "358", "5": "69", "6": "58", "0": "8", "1": "7", "7": "1" };
+    const oneDigitApart = (a, b) => {
+      const x = Math.abs(a).toFixed(2), y = Math.abs(b).toFixed(2);
+      if (x.length !== y.length) return false;
+      let n = 0, ok = true;
+      for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) { n++; ok = ok && ((DIG[x[k]] || "").includes(y[k]) || (DIG[y[k]] || "").includes(x[k])); }
+      return n === 1 && ok;
+    };
     const sim = (x, y) => { const a = norm(x), b = norm(y); const L = Math.max(a.length, b.length); return L ? 1 - lev(a, b) / L : 0; };
     const offOf = (r, items) => {
       const sum = items.reduce((a, i) => a + i.total, 0) + r.extras.reduce((a, e) => a + e.amount, 0);
@@ -937,6 +986,7 @@ Rules:
       if (r.items.length > base.items.length || (r.items.length === base.items.length && offOf(r, r.items) < offOf(base, base.items))) base = r;
     }
     const groups = base.items.map((i) => [{ ...i }]);
+    const strays = []; // lines another reading saw that the fullest one didn't
 
     for (const other of readings) {
       if (other === base) continue;
@@ -959,9 +1009,20 @@ Rules:
       for (let k = 0; k + 1 < withEnds.length; k++) {
         const [a0, b0] = withEnds[k], [a1, b1] = withEnds[k + 1];
         const ga = a1 - a0 - 1, gb = b1 - b0 - 1;
-        if (ga > 0 && ga === gb && ga <= 2) for (let t = 1; t <= ga; t++) matches.push([a0 + t, b0 + t]);
+        if (ga > 0 && ga === gb && ga <= 2) for (let t = 1; t <= ga; t++) {
+          const x = A[a0 + t], y = B[b0 + t];
+          if (Math.abs(cents(x.total) - cents(y.total)) <= 10 || oneDigitApart(x.total, y.total) || sim(x.name, y.name) >= 0.4) matches.push([a0 + t, b0 + t]);
+        }
       }
       for (const [x, y] of matches) groups[x].push({ ...B[y] });
+      const byB = new Map(matches.map(([x, y]) => [y, x]));
+      let after = -1;
+      for (let y = 0; y < m; y++) {
+        if (byB.has(y)) { after = byB.get(y); continue; }
+        const st = strays.find((t) => t.after === after && (cents(t.item.total) === cents(B[y].total) || sim(t.item.name, B[y].name) >= 0.5));
+        if (st) { st.n++; if ((B[y].conf || 0) > (st.item.conf || 0)) st.item = { ...B[y] }; }
+        else strays.push({ item: { ...B[y] }, after, n: 1 });
+      }
     }
 
     // Vote on price; the most confident reading supplies the name and quantity
@@ -980,18 +1041,21 @@ Rules:
       return { name: named.name, qty: named.qty, conf: named.conf, total: bestK / 100, votes: bestV.n, alts: [...votes.entries()].filter(([k]) => k !== bestK).map(([k, v]) => ({ v: k / 100, n: v.n })) };
     });
 
-    // Extras: take them from the reading closest to the total, voting by order where counts agree
-    let extrasFrom = base;
-    for (const r of readings) if (offOf(r, r.items) < offOf(extrasFrom, extrasFrom.items)) extrasFrom = r;
-    const extras = extrasFrom.extras.map((e, k) => {
-      const alts = new Map();
-      for (const r of readings) {
-        const o = r.extras.find((x) => sim(x.name, e.name) >= 0.6) || (r.extras.length === extrasFrom.extras.length ? r.extras[k] : null);
-        if (o) alts.set(cents(o.amount), (alts.get(cents(o.amount)) || 0) + 1);
-      }
-      let best = cents(e.amount), bn = 0;
-      for (const [c, nn] of alts) if (nn > bn) { best = c; bn = nn; }
-      return { ...e, amount: best / 100, votes: bn, alts: [...alts.entries()].filter(([c]) => c !== best).map(([c, nn]) => ({ v: c / 100, n: nn })) };
+    // Extras: gather across all readings; keep any seen in at least two (or in the only reading)
+    const exGroups = [];
+    for (const r of readings) for (const e of r.extras) {
+      const g = exGroups.find((G) => G.kind === e.kind && !G.from.has(r) && (sim(G.name, e.name) >= 0.55 || cents(G.list[0].amount) === cents(e.amount)));
+      if (g) { g.list.push(e); g.from.add(r); if (e.name.length > g.name.length) g.name = e.name; }
+      else exGroups.push({ name: e.name, kind: e.kind, list: [e], from: new Set([r]) });
+    }
+    const need = readings.length > 1 ? 2 : 1;
+    const extras = exGroups.filter((G) => G.list.length >= need).map((G) => {
+      const votes = new Map();
+      for (const e of G.list) votes.set(cents(e.amount), (votes.get(cents(e.amount)) || 0) + 1);
+      let best = null, bn = 0;
+      for (const [c, nn] of votes) if (nn > bn) { best = c; bn = nn; }
+      const named = G.list.reduce((a, e) => (sim(e.name, G.name) > sim(a.name, G.name) ? e : a), G.list[0]);
+      return { name: named.name, kind: G.kind, amount: best / 100, votes: bn, alts: [...votes.entries()].filter(([c]) => c !== best).map(([c, nn]) => ({ v: c / 100, n: nn })) };
     });
 
     const out = { ...base, items, extras, billTotal: base.billTotal ?? readings.find((r) => r.billTotal != null)?.billTotal ?? null };
@@ -1005,7 +1069,6 @@ Rules:
       // expensive; fixing one faint digit on a line the reader was unsure of is cheap.
       const opts = [];
       const lines = [...items.map((x) => ({ x, key: "total" })), ...extras.map((x) => ({ x, key: "amount" }))];
-      const DIG = { "3": "89", "8": "3069", "9": "358", "5": "69", "6": "58", "0": "8", "1": "7", "7": "1" };
       lines.forEach((l, li) => {
         const cur = cents(l.x[l.key]);
         for (const a of l.x.alts || []) opts.push({ li, l, v: a.v, d: cents(a.v) - cur, cost: 100 + 25 * Math.max(0, (l.x.votes || 1) - a.n) });
@@ -1016,6 +1079,16 @@ Rules:
           if (!(l.x.alts || []).some((a) => cents(a.v) === cents(v))) opts.push({ li, l, v, d: cents(v) - cur, cost: 120 + conf + (p < str.length - 2 ? 60 : 0) + 15 * ((l.x.votes || 1) - 1) });
         }
       });
+      // A line only some readings saw, if it (allowing one faint digit) is exactly what's missing
+      strays.forEach((st, si) => {
+        const v0 = st.item.total, conf = st.item.conf ?? 50;
+        opts.push({ li: "s" + si, ins: st, v: v0, d: cents(v0), cost: 110 + Math.max(0, 40 - 15 * st.n) });
+        const str = Math.abs(v0).toFixed(2);
+        for (let p = 0; p < str.length; p++) for (const dg of DIG[str[p]] || "") {
+          const v = parseFloat(str.slice(0, p) + dg + str.slice(p + 1));
+          opts.push({ li: "s" + si, ins: st, v, d: cents(v), cost: 150 + conf * 0.5 + (p < str.length - 2 ? 60 : 0) });
+        }
+      });
       let best = null;
       for (const o of opts) if (o.d === diff && (!best || o.cost < best.cost)) best = { cost: o.cost, ch: [o] };
       for (let i = 0; i < opts.length; i++) for (let j = i + 1; j < opts.length; j++) {
@@ -1024,7 +1097,12 @@ Rules:
         const c = A.cost + B.cost + 40;
         if (!best || c < best.cost) best = { cost: c, ch: [A, B] };
       }
-      if (best) { for (const o of best.ch) o.l.x[o.l.key] = o.v; out.repaired = best.ch.length; }
+      if (best) {
+        const ins = best.ch.filter((o) => o.ins).sort((a, b) => b.ins.after - a.ins.after);
+        for (const o of best.ch) if (!o.ins) o.l.x[o.l.key] = o.v;
+        for (const o of ins) items.splice(o.ins.after + 1, 0, { ...o.ins.item, total: o.v });
+        out.repaired = best.ch.length;
+      }
     }
     items.forEach((i) => { delete i.alts; delete i.votes; }); extras.forEach((e) => { delete e.alts; delete e.votes; });
     out.off = target != null ? Math.abs(total() - target) / 100 : Infinity;
@@ -1091,6 +1169,48 @@ Rules:
     for (let j = 0; j < px.length; j += 4) { const v = Math.max(0, Math.min(255, (px[j] - lo) * k)); px[j] = px[j + 1] = px[j + 2] = v; }
   }
 
+  // Resizes a crop of an RGBA image with the app's own code, so every browser feeds the
+  // reader identical pixels. Area-averages when shrinking, bilinear when enlarging.
+  function resampleCrop(src, sw, sh, box, tw, th) {
+    const out = new Uint8ClampedArray(tw * th * 4);
+    const sx = box.sw / tw, sy = box.sh / th;
+    if (sx >= 1 && sy >= 1) {
+      for (let y = 0; y < th; y++) {
+        const y0 = box.sy + y * sy, y1 = y0 + sy;
+        const iy0 = Math.floor(y0), iy1 = Math.min(sh, Math.ceil(y1));
+        for (let x = 0; x < tw; x++) {
+          const x0 = box.sx + x * sx, x1 = x0 + sx;
+          const ix0 = Math.floor(x0), ix1 = Math.min(sw, Math.ceil(x1));
+          let r = 0, g = 0, b = 0, wsum = 0;
+          for (let yy = iy0; yy < iy1; yy++) {
+            const wy = Math.min(yy + 1, y1) - Math.max(yy, y0);
+            if (wy <= 0) continue;
+            for (let xx = ix0; xx < ix1; xx++) {
+              const wx = Math.min(xx + 1, x1) - Math.max(xx, x0);
+              if (wx <= 0) continue;
+              const w = wx * wy, k = (yy * sw + xx) * 4;
+              r += src[k] * w; g += src[k + 1] * w; b += src[k + 2] * w; wsum += w;
+            }
+          }
+          const o = (y * tw + x) * 4;
+          out[o] = r / wsum; out[o + 1] = g / wsum; out[o + 2] = b / wsum; out[o + 3] = 255;
+        }
+      }
+    } else {
+      for (let y = 0; y < th; y++) {
+        const fy = Math.min(sh - 1, Math.max(0, box.sy + (y + 0.5) * sy - 0.5));
+        const y0 = Math.floor(fy), y1 = Math.min(sh - 1, y0 + 1), dy = fy - y0;
+        for (let x = 0; x < tw; x++) {
+          const fx = Math.min(sw - 1, Math.max(0, box.sx + (x + 0.5) * sx - 0.5));
+          const x0 = Math.floor(fx), x1 = Math.min(sw - 1, x0 + 1), dx = fx - x0;
+          const a = (y0 * sw + x0) * 4, b = (y0 * sw + x1) * 4, c = (y1 * sw + x0) * 4, d = (y1 * sw + x1) * 4, o = (y * tw + x) * 4;
+          for (let ch = 0; ch < 3; ch++) out[o + ch] = (src[a + ch] * (1 - dx) + src[b + ch] * dx) * (1 - dy) + (src[c + ch] * (1 - dx) + src[d + ch] * dx) * dy;
+          out[o + 3] = 255;
+        }
+      }
+    }
+    return out;
+  }
 
   function showPhotos(files) {
     const ph = $("#photos");
@@ -1124,7 +1244,7 @@ Rules:
     };
     try {
       const bitmaps = [];
-      for (const f of files) bitmaps.push(await loadBitmap(f));
+      for (const f of files) { const bmp = await loadBitmap(f); bitmaps.push(decodeFull(bmp)); if (bmp.close) bmp.close(); }
       const boxes = bitmaps.map(paperBox);
       const w = await getWorker();
       // Six readings: three sizes, two ways of turning colour into grey. Each catches lines the others miss.
@@ -1135,7 +1255,10 @@ Rules:
         let lines = [];
         for (let k = 0; k < bitmaps.length; k++) {
           if (cancelled) return;
-          const { data } = await w.recognize(renderCrop(bitmaps[k], boxes[k], passes[p][0], passes[p][1]));
+          const canvas = renderCrop(bitmaps[k], boxes[k], passes[p][0], passes[p][1]);
+          const { data } = await w.recognize(canvas);
+          if (cancelled) return;
+          await refinePrices(w, canvas, data);
           lines = lines.concat((data.lines || []).map((l) => ({ text: l.text, conf: l.confidence })));
           if (!data.lines || !data.lines.length) lines = lines.concat(String(data.text || "").split("\n").map((t) => ({ text: t, conf: 50 })));
         }
@@ -1159,6 +1282,7 @@ Rules:
         : found() + " Some lines don't add up to the bill total, so a few may be misread.", false);
     } catch (e) {
       if (cancelled) return;
+      try { console.error("scan failed", e && (e.stack || e.message || e.code || e)); } catch (_) {}
       const code = e && e.code;
       if (code === "no_items") setNote("Couldn't find any priced items. Try a flatter, well-lit photo with the whole bill in frame, or read it with Claude.", true);
       else if ((e && e.name === "InvalidStateError") || /decode|bitmap|source image/i.test(String(e && e.message))) setNote("That photo format couldn't be opened. Try a JPEG or a screenshot.", true);
