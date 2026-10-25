@@ -802,6 +802,7 @@ Rules:
 
     const raw = text.split(/\r?\n/).map((l) => l.replace(/\s+$/, ""));
     const items = [], extras = [];
+    let subtotal = null, paid = null;
     let billTotal = null, merchant = "", pendingName = "", seenItem = false, afterTotal = false;
 
     for (let li = 0; li < raw.length; li++) {
@@ -854,6 +855,10 @@ Rules:
         afterTotal = true;
         continue;
       }
+      if (!afterTotal) {
+        if (/sub\s*-?\s*tot/i.test(name)) { if (subtotal == null) subtotal = Math.abs(value); continue; }
+        if (/payment|paid|credit|debit|card|visa|master\s*card|amex|contactless|cash\b|tender/i.test(name)) { if (paid == null) paid = Math.abs(value); continue; }
+      }
       if (afterTotal && !TIP.test(name)) continue; // payments, VAT breakdowns, savings after the total
       if (SERVICE.test(name)) { extras.push({ name, amount: value, kind: "service" }); continue; }
       if (TIP.test(name)) { extras.push({ name, amount: value, kind: "tip" }); continue; }
@@ -864,11 +869,16 @@ Rules:
       items.push({ name: cap(name), qty, total: Math.round(value * 100) / 100 });
       seenItem = true;
     }
+    // No "Total" line: fall back to what was paid, then to subtotal plus charges
+    if (billTotal == null) {
+      if (paid != null) billTotal = paid;
+      else if (subtotal != null) billTotal = Math.round((subtotal + extras.reduce((a, e) => a + e.amount, 0)) * 100) / 100;
+    }
     const sorted = items.map((i) => i.total).sort((a, b) => a - b);
     const median = sorted.length ? sorted[sorted.length >> 1] : 0;
     for (let k = items.length - 1; k >= 0; k--) {
       const t = items[k].total;
-      if ((billTotal != null && t > billTotal + 0.01) || (items.length >= 3 && t > 100 && t > median * 15)) items.splice(k, 1);
+      if ((billTotal != null && (t > billTotal + 0.01 || (items.length > 1 && t >= billTotal - 0.01))) || (items.length >= 3 && t > 100 && t > median * 15)) items.splice(k, 1);
     }
     return { merchant, symbol, items, extras, billTotal };
   }
