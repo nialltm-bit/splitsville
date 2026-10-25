@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Photograph a bill, tick what you had, see what you owe.">
-<meta name="theme-color" content="#dde2e8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fdf6e4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e172d" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Bill Splitter">
@@ -17,205 +17,196 @@
 <title>Bill Splitter</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Caveat:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap">
 <style>
-  /* Layout: one narrow column. The bill is a strip of receipt paper on a tabletop; you highlight your lines, your share is pencilled in, and the total sits pinned at the bottom like the card machine. */
+  /* Layout: a poster in one column. Barcode stripes up top, a wide heavy wordmark set off to the right, the bill as ruled rows, and your total in a red slab whose curved top cuts into the page. Flat colour only: cream, navy, cobalt, red. */
   :root {
-    --table: #dde2e8;
-    --paper: #fcfdfd;
-    --ink: #1c222a;
-    --muted: #67707c;
-    --rule: #cdd3da;
-    --hl: #ecff4f;
-    --hl-ink: #1c222a;
-    --pen: #2343c4;
-    --warn: #a3510a;
-    --bar: #1c222a;
-    --bar-fg: #f6f8fa;
-    --bar-muted: #a9b2bd;
-    --veil: rgba(252, 253, 253, .86);
-    --shadow: 0 1px 0 rgba(28, 34, 42, .05), 0 14px 30px -14px rgba(28, 34, 42, .32);
-    --f-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    --f-pen: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+    --bg: #fdf6e4;
+    --ink: #101a33;
+    --muted: #57607a;
+    --blue: #0479c1;
+    --red: #e2483f;
+    --on-blue: #fdf6e4;
+    --on-red: #fdf6e4;
+    --rule: rgba(16, 26, 51, .16);
+    --veil: rgba(253, 246, 228, .92);
+    --f-wide: "Archivo", "Helvetica Neue", Arial, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --table: #0f1216; --paper: #1b1f25; --ink: #e7eaee; --muted: #9aa3ae; --rule: #343b45;
-      --hl: #56640c; --hl-ink: #f6ffc4; --pen: #93a6ff; --warn: #f2a65e;
-      --bar: #e7eaee; --bar-fg: #14181d; --bar-muted: #4d5560;
-      --veil: rgba(27, 31, 37, .88);
-      --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 16px 34px -14px rgba(0, 0, 0, .7);
+      --bg: #0e172d; --ink: #f6eedb; --muted: #a3abbf; --blue: #1f8fdc; --red: #e5524a;
+      --on-blue: #fdf6e4; --on-red: #fdf6e4; --rule: rgba(246, 238, 219, .16); --veil: rgba(14, 23, 45, .93);
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --table: #0f1216; --paper: #1b1f25; --ink: #e7eaee; --muted: #9aa3ae; --rule: #343b45;
-    --hl: #56640c; --hl-ink: #f6ffc4; --pen: #93a6ff; --warn: #f2a65e;
-    --bar: #e7eaee; --bar-fg: #14181d; --bar-muted: #4d5560;
-    --veil: rgba(27, 31, 37, .88);
-    --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 16px 34px -14px rgba(0, 0, 0, .7);
+    --bg: #0e172d; --ink: #f6eedb; --muted: #a3abbf; --blue: #1f8fdc; --red: #e5524a;
+    --on-blue: #fdf6e4; --on-red: #fdf6e4; --rule: rgba(246, 238, 219, .16); --veil: rgba(14, 23, 45, .93);
     color-scheme: dark;
   }
 
-  html { background: var(--table); }
+  html { background: var(--bg); }
   body {
-    background: var(--table);
-    color: var(--ink);
-    font-family: var(--f-display);
-    font-size: 16px;
-    line-height: 1.45;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--f-wide); font-size: 16px; line-height: 1.45;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 22px 150px;
+    padding-block: 0 210px;
+    overflow-x: hidden;
   }
-  .wrap { max-width: 32rem; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-  :focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+  .wrap { max-width: 32rem; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  :focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  button { -webkit-tap-highlight-color: transparent; }
 
-  h1 { margin: 0; font-weight: 800; font-size: 2rem; line-height: 1; letter-spacing: -.025em; text-wrap: balance; }
-  .lede { margin: 6px 0 0; color: var(--muted); max-width: 34ch; }
+  /* Header: stripes that dip in an arc, like a barcode bending over the bill */
+  .bars {
+    height: 108px; margin-top: 0;
+    background: repeating-linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 30px);
+    -webkit-mask: radial-gradient(ellipse 62% 78% at 50% 112%, transparent 99.5%, #000 100%);
+    mask: radial-gradient(ellipse 62% 78% at 50% 112%, transparent 99.5%, #000 100%);
+  }
+  header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-left: 22%; }
+  h1 {
+    margin: 0; font-weight: 900; font-stretch: 125%; text-transform: uppercase;
+    font-size: clamp(2.3rem, 11vw, 3.4rem); line-height: .86; letter-spacing: -.01em;
+  }
+  .lede { margin: 0; font-size: .95rem; font-weight: 500; max-width: 30ch; }
 
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .btn {
-    font: inherit; font-weight: 600; border: 0; border-radius: 999px; cursor: pointer;
-    min-height: 46px; padding: 0 20px; display: inline-flex; align-items: center; gap: 8px;
+    font: inherit; font-weight: 800; font-stretch: 112%; text-transform: uppercase; letter-spacing: .02em; font-size: .9rem;
+    border: 0; border-radius: 0; cursor: pointer; min-height: 54px; padding: 0 16px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   }
-  .btn svg { width: 18px; height: 18px; flex: none; }
-  .btn.primary { background: var(--ink); color: var(--paper); }
-  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
-  .btn:disabled { opacity: .45; cursor: default; }
-  .note { margin: 0; font-size: .92rem; color: var(--muted); }
-  .note.err { color: var(--warn); }
+  .btn.primary { background: var(--ink); color: var(--bg); }
+  .btn.primary .lens { width: 18px; height: 18px; border-radius: 50%; background: var(--red); box-shadow: inset 0 0 0 5px var(--blue); flex: none; }
+  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 3px var(--ink); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .note { margin: -6px 0 0; font-size: .9rem; color: var(--muted); font-weight: 500; }
+  .note.err { color: var(--red); font-weight: 600; }
+  .alt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: -12px; }
+  .alt small { color: var(--muted); font-size: .8rem; }
+  .link { font: 700 .88rem/1 var(--f-wide); background: none; border: 0; color: var(--blue); cursor: pointer; padding: 8px 0; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  .link.danger { color: var(--red); }
 
-  /* Receipt */
-  .paper {
-    position: relative; background: var(--paper); box-shadow: var(--shadow);
-    padding: 20px 16px 18px; margin-block: 8px; font-family: var(--f-mono); font-size: .9rem;
-  }
-  .paper::before, .paper::after {
-    content: ""; position: absolute; left: 0; right: 0; height: 8px;
-    background-repeat: repeat-x; background-size: 14px 8px;
-  }
-  .paper::before { top: -8px; background-image: radial-gradient(circle at 7px 8px, var(--paper) 6.5px, transparent 7.2px); }
-  .paper::after { bottom: -8px; background-image: radial-gradient(circle at 7px 0, var(--paper) 6.5px, transparent 7.2px); }
-
-  .p-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px dashed var(--rule); }
-  .merchant { font-weight: 500; text-transform: uppercase; letter-spacing: .12em; min-width: 0; overflow-wrap: anywhere; }
-  .tag { font-family: var(--f-display); font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); white-space: nowrap; }
-  .head-r { display: flex; align-items: center; gap: 10px; flex: none; }
-  .link { font: 600 .9rem/1 var(--f-display); background: none; border: 0; color: var(--pen); cursor: pointer; padding: 8px 2px; }
+  /* The bill */
+  .paper { position: relative; border-top: 6px solid var(--ink); padding-top: 14px; }
+  .p-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; }
+  .merchant { font-weight: 900; font-stretch: 118%; text-transform: uppercase; font-size: 1.05rem; line-height: 1.1; min-width: 0; overflow-wrap: anywhere; }
+  .head-r { display: flex; align-items: center; gap: 12px; flex: none; }
+  .tag { background: var(--red); color: var(--on-red); font-size: .66rem; font-weight: 800; font-stretch: 112%; text-transform: uppercase; letter-spacing: .1em; padding: 4px 7px; }
 
   .list { list-style: none; margin: 0; padding: 0; }
-  .row { border-bottom: 1px dashed var(--rule); }
+  .row { border-top: 1.5px solid var(--ink); margin-inline: -12px; padding-inline: 12px; transition: background-color .15s, color .15s; }
+  .row.sel { background: var(--blue); color: var(--on-blue); border-top-color: var(--blue); }
+  .row.sel + .row { border-top-color: var(--ink); }
   .line {
     all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
-    display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center;
-    padding: 12px 2px; -webkit-tap-highlight-color: transparent;
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 14px; align-items: center;
+    padding: 14px 0; -webkit-tap-highlight-color: transparent;
   }
-  .ck { width: 22px; height: 22px; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--muted); position: relative; transition: background-color .12s; }
-  .row.sel .ck { background: var(--ink); box-shadow: none; }
-  .row.sel .ck::after { content: ""; position: absolute; left: 7px; top: 3px; width: 6px; height: 11px; border: solid var(--paper); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
-  .line:focus-visible { outline: 2px solid var(--pen); outline-offset: -2px; }
-  .qty { color: var(--muted); margin-right: .5em; }
-  .name { min-width: 0; overflow-wrap: anywhere; }
-  .mark { padding: 1px 3px; margin-left: -3px; border-radius: 3px; transition: background-color .15s; }
-  .row.sel .mark {
-    background: linear-gradient(100deg, transparent 0 .1em, var(--hl) .3em calc(100% - .25em), transparent calc(100% - .05em));
-    color: var(--hl-ink);
-    -webkit-box-decoration-break: clone; box-decoration-break: clone;
-  }
-  .price { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-  .ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 0 2px 12px 38px; }
-  .ctrls .link { padding: 4px 0; font-size: .84rem; }
-  .steps { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 0 2px 12px 38px; }
-  .step { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: .88rem; }
-  .step-l { color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-size: .7rem; font-weight: 600; }
-  .sb {
-    width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--rule); background: transparent;
-    color: var(--ink); font: 500 1.05rem/1 var(--f-display); cursor: pointer; display: grid; place-items: center; padding: 0;
-  }
+  .line:focus-visible { outline: 3px solid var(--red); outline-offset: -3px; }
+  .ck { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 2.5px currentColor; position: relative; }
+  .row.sel .ck { background: var(--on-blue); box-shadow: none; }
+  .row.sel .ck::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--ink); }
+  :root[data-theme="dark"] .row.sel .ck::after { background: #101a33; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .row.sel .ck::after { background: #101a33; } }
+  .name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: .98rem; line-height: 1.25; }
+  .qty { font-weight: 900; font-stretch: 118%; margin-right: .45em; }
+  .mark { }
+  .price { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; font-weight: 700; }
+  .ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 0 0 14px 40px; margin-top: -4px; }
+  .row.sel .link { color: var(--on-blue); }
+  .pen { margin-left: auto; font-weight: 900; font-stretch: 118%; font-size: 1.15rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .steps { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 0 0 14px 40px; }
+  .step { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; font-weight: 600; }
+  .step-l { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; font-weight: 800; opacity: .85; }
+  .sb { width: 32px; height: 32px; border-radius: 0; border: 2px solid currentColor; background: transparent; color: inherit; font: 800 1.1rem/1 var(--f-wide); cursor: pointer; display: grid; place-items: center; padding: 0; }
   .sb:disabled { opacity: .35; cursor: default; }
   .step output { min-width: 4.4em; text-align: center; font-variant-numeric: tabular-nums; }
-  .pen { font-family: var(--f-pen); font-weight: 600; color: var(--pen); font-size: 1.5rem; line-height: 1; margin-left: auto; transform: rotate(-3deg); white-space: nowrap; }
 
-  .sumrow { display: flex; justify-content: space-between; gap: 12px; padding: 12px 2px; color: var(--muted); }
-  .sumrow .price { color: var(--ink); }
-  .extra { display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
-  .sw { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; cursor: pointer; }
+  .sumrow { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 3px solid var(--ink); font-weight: 600; }
+  .extra { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .sw { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; cursor: pointer; font-weight: 500; }
   .sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-  .sw-ui { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--rule); position: relative; transition: background-color .15s; }
-  .sw-ui::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--paper); transition: transform .15s; }
+  .sw-ui { flex: none; width: 40px; height: 22px; box-shadow: inset 0 0 0 2px var(--ink); position: relative; }
+  .sw-ui::after { content: ""; position: absolute; top: 4px; left: 4px; width: 14px; height: 14px; background: var(--ink); transition: transform .15s, background-color .15s; }
   .sw input:checked + .sw-ui { background: var(--ink); }
-  .sw input:checked + .sw-ui::after { transform: translateX(14px); }
-  .sw input:focus-visible + .sw-ui { outline: 2px solid var(--pen); outline-offset: 2px; }
+  .sw input:checked + .sw-ui::after { transform: translateX(18px); background: var(--red); border-radius: 50%; }
+  .sw input:focus-visible + .sw-ui { outline: 3px solid var(--red); outline-offset: 2px; }
   .ename { min-width: 0; overflow-wrap: anywhere; }
   .extra.off .ename, .extra.off .price { color: var(--muted); text-decoration: line-through; }
-  .extra .pen { font-size: 1.3rem; margin-left: 0; }
+  .extra .pen { margin-left: 0; font-size: .95rem; color: var(--blue); }
 
-  .totrow { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 8px; padding: 12px 2px 4px; border-top: 2px solid var(--ink); font-weight: 500; font-size: 1rem; }
-  .check { margin: 8px 2px 0; font-family: var(--f-display); font-size: .86rem; color: var(--warn); }
+  .totrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 8px; padding-top: 12px; border-top: 6px solid var(--ink); font-weight: 900; font-stretch: 118%; text-transform: uppercase; font-size: 1.15rem; }
+  .check { margin: 10px 0 0; font-size: .86rem; color: var(--red); font-weight: 600; }
 
-  .edit-row { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 5.6em 32px; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--rule); }
+  .edit-row { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 5.6em 32px; gap: 6px; align-items: center; padding: 6px 0; border-top: 1.5px solid var(--rule); }
   .edit-row.x { grid-template-columns: minmax(0, 1fr) 5.6em 32px; }
-  .fld { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 4px; padding: 8px 6px; min-width: 0; width: 100%; box-sizing: border-box; }
+  .fld { font: 500 .95rem var(--f-wide); color: var(--ink); background: transparent; border: 0; box-shadow: inset 0 -2px 0 var(--ink); border-radius: 0; padding: 8px 4px; min-width: 0; width: 100%; box-sizing: border-box; }
   .fld.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .fld:focus { border-color: var(--pen); outline: none; }
-  .del { width: 32px; height: 32px; border: 0; background: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; border-radius: 50%; }
-  .edit-tools { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 6px; }
-  .link.danger { color: var(--warn); }
-  .merchant-in { text-transform: uppercase; letter-spacing: .08em; }
+  .fld:focus { outline: none; box-shadow: inset 0 -3px 0 var(--blue); }
+  .del { width: 32px; height: 32px; border: 0; background: none; color: var(--red); font-size: 1.4rem; font-weight: 700; cursor: pointer; }
+  .edit-tools { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 6px 0; }
+  .merchant-in { text-transform: uppercase; font-weight: 800; }
   .tot-in { width: 6.5em; }
 
-  .scan { position: absolute; inset: 0; background: var(--veil); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow: hidden; font-family: var(--f-display); z-index: 2; }
-  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--pen); box-shadow: 0 0 14px 2px var(--pen); top: 0; animation: sweep 1.8s ease-in-out infinite alternate; opacity: .8; }
-  @keyframes sweep { from { top: 6%; } to { top: 94%; } }
-  .scan-t { font-weight: 600; font-size: 1.05rem; }
-  .scan-s { color: var(--muted); font-size: .88rem; margin-top: -8px; font-variant-numeric: tabular-nums; }
-  .alt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: -8px; }
-  .alt .link { font-size: .88rem; }
-  .alt small { color: var(--muted); font-size: .8rem; }
+  .scan { position: absolute; inset: 0; background: var(--veil); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow: hidden; z-index: 2; text-align: center; padding: 0 16px; }
+  .scan-line { position: absolute; left: -12px; right: -12px; height: 10px; background: var(--red); top: 0; animation: sweep 1.6s cubic-bezier(.6,0,.4,1) infinite alternate; }
+  @keyframes sweep { from { top: 4%; } to { top: 94%; } }
+  .scan-t { font-weight: 900; font-stretch: 125%; text-transform: uppercase; font-size: 1.4rem; line-height: 1; }
+  .scan-s { color: var(--muted); font-size: .9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
   .below { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
-  details.photo summary { cursor: pointer; color: var(--pen); font-weight: 600; font-size: .9rem; }
+  details.photo summary { cursor: pointer; color: var(--blue); font-weight: 700; font-size: .9rem; }
   .photos { display: grid; gap: 10px; margin-top: 10px; }
-  .photos img { width: 100%; border-radius: 6px; box-shadow: var(--shadow); }
+  .photos img { width: 100%; border: 3px solid var(--ink); box-sizing: border-box; }
+  .copy-fallback { width: 100%; box-sizing: border-box; min-height: 9em; font: .9rem/1.5 var(--f-wide); color: var(--ink); background: transparent; border: 3px solid var(--ink); padding: 10px; }
 
-  .copy-fallback { width: 100%; box-sizing: border-box; min-height: 9em; font: .85rem/1.5 var(--f-mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; }
-
-  /* Total bar */
+  /* Total: a red slab with a curved top, and a disc showing your slice of the bill */
   .bar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-    background: var(--bar); color: var(--bar-fg);
+    background: var(--red); color: var(--on-red);
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-top: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    padding-top: 40px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
-  .bar-in { max-width: 32rem; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  .bar::before {
+    content: ""; position: absolute; left: -15%; right: -15%; top: -64px; height: 96px;
+    background: var(--bg); border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  }
+  .bar-in { position: relative; max-width: 32rem; margin: 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+  .pie {
+    --p: 0; width: 62px; height: 62px; border-radius: 50%;
+    background: conic-gradient(#101a33 0 calc(var(--p) * 1turn), var(--blue) 0);
+    box-shadow: 0 0 0 4px var(--on-red);
+    transition: --p .3s;
+  }
   .bar-txt { min-width: 0; }
-  .owe-l { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--bar-muted); }
-  .owe { font-size: 2.1rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.05; font-variant-numeric: tabular-nums; }
-  .owe-d { font-size: .84rem; color: var(--bar-muted); overflow-wrap: anywhere; }
-  .copy { margin-left: auto; flex: none; background: var(--bar-fg); color: var(--bar); }
+  .owe-l { font-size: .7rem; font-weight: 800; font-stretch: 112%; text-transform: uppercase; letter-spacing: .12em; }
+  .owe { font-size: 2.3rem; font-weight: 900; font-stretch: 125%; letter-spacing: -.01em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .owe-d { font-size: .82rem; font-weight: 500; overflow-wrap: anywhere; opacity: .92; margin-top: 2px; }
+  .copy { background: #101a33; color: #fdf6e4; min-height: 48px; padding: 0 16px; }
 
+  @media (max-width: 380px) { header { padding-left: 12%; } .pie { width: 48px; height: 48px; } .owe { font-size: 1.9rem; } }
   @media (prefers-reduced-motion: reduce) {
     .scan-line { animation: none; top: 50%; }
-    .mark, .sw-ui, .sw-ui::after, .ck { transition: none; }
+    .row, .sw-ui::after { transition: none; }
   }
 </style>
 
+
 </head>
 <body>
+<div class="bars" aria-hidden="true"></div>
 <div class="wrap">
   <header>
     <h1>Bill Splitter</h1>
-    <p class="lede">Photograph the bill, tap what you had, and see what you owe.</p>
+    <p class="lede">Photograph the bill, tick what you had, and see exactly what you owe.</p>
   </header>
 
   <div class="actions" id="actions">
-    <button class="btn primary" id="snapBtn" type="button" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-      Take photo
-    </button>
+    <button class="btn primary" id="snapBtn" type="button" disabled><span class="lens" aria-hidden="true"></span>Take photo</button>
     <button class="btn ghost" id="pickBtn" type="button" disabled>Choose photo</button>
     <input type="file" id="snapIn" accept="image/*" capture="environment" hidden>
     <input type="file" id="pickIn" accept="image/*" multiple hidden>
@@ -249,7 +240,7 @@
 
     <div class="scan" id="scan" hidden>
       <div class="scan-line"></div>
-      <div class="scan-t">Reading the bill</div>
+      <div class="scan-t">Reading<br>the bill</div>
       <div class="scan-s" id="scanS">On your phone, nothing uploaded</div>
       <button class="btn ghost" id="cancelBtn" type="button">Cancel</button>
     </div>
@@ -267,10 +258,11 @@
 
 <div class="bar" role="region" aria-label="Your share">
   <div class="bar-in">
+    <div class="pie" id="pie" role="img" aria-label="Your share of the bill"></div>
     <div class="bar-txt">
       <div class="owe-l">You owe</div>
       <div class="owe" id="owe" aria-live="polite">£0.00</div>
-      <div class="owe-d" id="oweD">Tap the items you had</div>
+      <div class="owe-d" id="oweD">Tick the items you had</div>
     </div>
     <button class="btn copy" id="copyBtn" type="button" disabled>Copy</button>
   </div>
@@ -488,8 +480,11 @@
     } else chk.hidden = true;
 
     $("#owe").textContent = fmt(c.owe);
+    const frac = c.billSub > 0 ? Math.max(0, Math.min(1, c.mySub / c.billSub)) : 0;
+    $("#pie").style.setProperty("--p", frac.toFixed(4));
+    $("#pie").setAttribute("aria-label", `Your share is ${Math.round(frac * 100)}% of the bill`);
     let d;
-    if (!c.count) d = bill.items.length ? "Tap the items you had" : "Add a bill to start";
+    if (!c.count) d = bill.items.length ? "Tick the items you had" : "Add a bill to start";
     else {
       d = `${c.count} item${c.count === 1 ? "" : "s"}`;
       if (c.extras > 0.004) {

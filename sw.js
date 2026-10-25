@@ -1,5 +1,5 @@
 // Offline support: keeps the app and its text reader on the phone after first use.
-const CACHE = "bill-splitter-v1";
+const CACHE = "bill-splitter-v2";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
