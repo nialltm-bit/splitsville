@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Photograph a bill, tick what you had, see what you owe.">
+<meta name="theme-color" content="#dde2e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bill Splitter">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Bill Splitter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Caveat:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one narrow column. The bill is a strip of receipt paper on a tabletop; you highlight your lines, your share is pencilled in, and the total sits pinned at the bottom like the card machine. */
+  :root {
+    --table: #dde2e8;
+    --paper: #fcfdfd;
+    --ink: #1c222a;
+    --muted: #67707c;
+    --rule: #cdd3da;
+    --hl: #ecff4f;
+    --hl-ink: #1c222a;
+    --pen: #2343c4;
+    --warn: #a3510a;
+    --bar: #1c222a;
+    --bar-fg: #f6f8fa;
+    --bar-muted: #a9b2bd;
+    --veil: rgba(252, 253, 253, .86);
+    --shadow: 0 1px 0 rgba(28, 34, 42, .05), 0 14px 30px -14px rgba(28, 34, 42, .32);
+    --f-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --f-pen: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --table: #0f1216; --paper: #1b1f25; --ink: #e7eaee; --muted: #9aa3ae; --rule: #343b45;
+      --hl: #56640c; --hl-ink: #f6ffc4; --pen: #93a6ff; --warn: #f2a65e;
+      --bar: #e7eaee; --bar-fg: #14181d; --bar-muted: #4d5560;
+      --veil: rgba(27, 31, 37, .88);
+      --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 16px 34px -14px rgba(0, 0, 0, .7);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --table: #0f1216; --paper: #1b1f25; --ink: #e7eaee; --muted: #9aa3ae; --rule: #343b45;
+    --hl: #56640c; --hl-ink: #f6ffc4; --pen: #93a6ff; --warn: #f2a65e;
+    --bar: #e7eaee; --bar-fg: #14181d; --bar-muted: #4d5560;
+    --veil: rgba(27, 31, 37, .88);
+    --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 16px 34px -14px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+
+  html { background: var(--table); }
+  body {
+    background: var(--table);
+    color: var(--ink);
+    font-family: var(--f-display);
+    font-size: 16px;
+    line-height: 1.45;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 22px 150px;
+  }
+  .wrap { max-width: 32rem; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  :focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+
+  h1 { margin: 0; font-weight: 800; font-size: 2rem; line-height: 1; letter-spacing: -.025em; text-wrap: balance; }
+  .lede { margin: 6px 0 0; color: var(--muted); max-width: 34ch; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    font: inherit; font-weight: 600; border: 0; border-radius: 999px; cursor: pointer;
+    min-height: 46px; padding: 0 20px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn.primary { background: var(--ink); color: var(--paper); }
+  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .note { margin: 0; font-size: .92rem; color: var(--muted); }
+  .note.err { color: var(--warn); }
+
+  /* Receipt */
+  .paper {
+    position: relative; background: var(--paper); box-shadow: var(--shadow);
+    padding: 20px 16px 18px; margin-block: 8px; font-family: var(--f-mono); font-size: .9rem;
+  }
+  .paper::before, .paper::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 8px;
+    background-repeat: repeat-x; background-size: 14px 8px;
+  }
+  .paper::before { top: -8px; background-image: radial-gradient(circle at 7px 8px, var(--paper) 6.5px, transparent 7.2px); }
+  .paper::after { bottom: -8px; background-image: radial-gradient(circle at 7px 0, var(--paper) 6.5px, transparent 7.2px); }
+
+  .p-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px dashed var(--rule); }
+  .merchant { font-weight: 500; text-transform: uppercase; letter-spacing: .12em; min-width: 0; overflow-wrap: anywhere; }
+  .tag { font-family: var(--f-display); font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); white-space: nowrap; }
+  .head-r { display: flex; align-items: center; gap: 10px; flex: none; }
+  .link { font: 600 .9rem/1 var(--f-display); background: none; border: 0; color: var(--pen); cursor: pointer; padding: 8px 2px; }
+
+  .list { list-style: none; margin: 0; padding: 0; }
+  .row { border-bottom: 1px dashed var(--rule); }
+  .line {
+    all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+    display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    padding: 12px 2px; -webkit-tap-highlight-color: transparent;
+  }
+  .ck { width: 22px; height: 22px; border-radius: 6px; box-shadow: inset 0 0 0 2px var(--muted); position: relative; transition: background-color .12s; }
+  .row.sel .ck { background: var(--ink); box-shadow: none; }
+  .row.sel .ck::after { content: ""; position: absolute; left: 7px; top: 3px; width: 6px; height: 11px; border: solid var(--paper); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+  .line:focus-visible { outline: 2px solid var(--pen); outline-offset: -2px; }
+  .qty { color: var(--muted); margin-right: .5em; }
+  .name { min-width: 0; overflow-wrap: anywhere; }
+  .mark { padding: 1px 3px; margin-left: -3px; border-radius: 3px; transition: background-color .15s; }
+  .row.sel .mark {
+    background: linear-gradient(100deg, transparent 0 .1em, var(--hl) .3em calc(100% - .25em), transparent calc(100% - .05em));
+    color: var(--hl-ink);
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  }
+  .price { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 0 2px 12px 38px; }
+  .ctrls .link { padding: 4px 0; font-size: .84rem; }
+  .steps { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 0 2px 12px 38px; }
+  .step { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: .88rem; }
+  .step-l { color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-size: .7rem; font-weight: 600; }
+  .sb {
+    width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--rule); background: transparent;
+    color: var(--ink); font: 500 1.05rem/1 var(--f-display); cursor: pointer; display: grid; place-items: center; padding: 0;
+  }
+  .sb:disabled { opacity: .35; cursor: default; }
+  .step output { min-width: 4.4em; text-align: center; font-variant-numeric: tabular-nums; }
+  .pen { font-family: var(--f-pen); font-weight: 600; color: var(--pen); font-size: 1.5rem; line-height: 1; margin-left: auto; transform: rotate(-3deg); white-space: nowrap; }
+
+  .sumrow { display: flex; justify-content: space-between; gap: 12px; padding: 12px 2px; color: var(--muted); }
+  .sumrow .price { color: var(--ink); }
+  .extra { display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
+  .sw { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; cursor: pointer; }
+  .sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .sw-ui { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--rule); position: relative; transition: background-color .15s; }
+  .sw-ui::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--paper); transition: transform .15s; }
+  .sw input:checked + .sw-ui { background: var(--ink); }
+  .sw input:checked + .sw-ui::after { transform: translateX(14px); }
+  .sw input:focus-visible + .sw-ui { outline: 2px solid var(--pen); outline-offset: 2px; }
+  .ename { min-width: 0; overflow-wrap: anywhere; }
+  .extra.off .ename, .extra.off .price { color: var(--muted); text-decoration: line-through; }
+  .extra .pen { font-size: 1.3rem; margin-left: 0; }
+
+  .totrow { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 8px; padding: 12px 2px 4px; border-top: 2px solid var(--ink); font-weight: 500; font-size: 1rem; }
+  .check { margin: 8px 2px 0; font-family: var(--f-display); font-size: .86rem; color: var(--warn); }
+
+  .edit-row { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 5.6em 32px; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--rule); }
+  .edit-row.x { grid-template-columns: minmax(0, 1fr) 5.6em 32px; }
+  .fld { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 4px; padding: 8px 6px; min-width: 0; width: 100%; box-sizing: border-box; }
+  .fld.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .fld:focus { border-color: var(--pen); outline: none; }
+  .del { width: 32px; height: 32px; border: 0; background: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; border-radius: 50%; }
+  .edit-tools { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 6px; }
+  .link.danger { color: var(--warn); }
+  .merchant-in { text-transform: uppercase; letter-spacing: .08em; }
+  .tot-in { width: 6.5em; }
+
+  .scan { position: absolute; inset: 0; background: var(--veil); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow: hidden; font-family: var(--f-display); z-index: 2; }
+  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--pen); box-shadow: 0 0 14px 2px var(--pen); top: 0; animation: sweep 1.8s ease-in-out infinite alternate; opacity: .8; }
+  @keyframes sweep { from { top: 6%; } to { top: 94%; } }
+  .scan-t { font-weight: 600; font-size: 1.05rem; }
+  .scan-s { color: var(--muted); font-size: .88rem; margin-top: -8px; font-variant-numeric: tabular-nums; }
+  .alt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: -8px; }
+  .alt .link { font-size: .88rem; }
+  .alt small { color: var(--muted); font-size: .8rem; }
+
+  .below { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+  details.photo summary { cursor: pointer; color: var(--pen); font-weight: 600; font-size: .9rem; }
+  .photos { display: grid; gap: 10px; margin-top: 10px; }
+  .photos img { width: 100%; border-radius: 6px; box-shadow: var(--shadow); }
+
+  .copy-fallback { width: 100%; box-sizing: border-box; min-height: 9em; font: .85rem/1.5 var(--f-mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; }
+
+  /* Total bar */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    background: var(--bar); color: var(--bar-fg);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-top: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  .bar-in { max-width: 32rem; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  .bar-txt { min-width: 0; }
+  .owe-l { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--bar-muted); }
+  .owe { font-size: 2.1rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .owe-d { font-size: .84rem; color: var(--bar-muted); overflow-wrap: anywhere; }
+  .copy { margin-left: auto; flex: none; background: var(--bar-fg); color: var(--bar); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scan-line { animation: none; top: 50%; }
+    .mark, .sw-ui, .sw-ui::after, .ck { transition: none; }
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bill Splitter</h1>
+    <p class="lede">Photograph the bill, tap what you had, and see what you owe.</p>
+  </header>
+
+  <div class="actions" id="actions">
+    <button class="btn primary" id="snapBtn" type="button" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Take photo
+    </button>
+    <button class="btn ghost" id="pickBtn" type="button" disabled>Choose photo</button>
+    <input type="file" id="snapIn" accept="image/*" capture="environment" hidden>
+    <input type="file" id="pickIn" accept="image/*" multiple hidden>
+  </div>
+  <p class="note" id="note">Tick the items you had. This is an example bill; take a photo of yours to replace it.</p>
+  <div class="alt" id="alt" hidden>
+    <button class="link" id="claudeBtn" type="button">Read it with Claude instead</button>
+    <small>More accurate. Uses a little of your Claude allowance.</small>
+  </div>
+
+  <section class="paper" id="paper" aria-label="Bill">
+    <div class="p-head">
+      <div class="merchant" id="merchant"></div>
+      <div class="head-r">
+        <span class="tag" id="exTag">Example</span>
+        <button class="link" id="editBtn" type="button">Edit</button>
+      </div>
+    </div>
+    <ul class="list" id="items"></ul>
+    <div class="edit-tools" id="itemTools" hidden>
+      <button class="link" id="addItem" type="button">+ Add item</button>
+    </div>
+    <div class="sumrow"><span>Subtotal</span><span class="price" id="sub"></span></div>
+    <ul class="list" id="extras"></ul>
+    <div class="edit-tools" id="extraTools" hidden>
+      <button class="link" id="addExtra" type="button">+ Add charge or discount</button>
+      <button class="link danger" id="clearBill" type="button">Clear bill</button>
+    </div>
+    <div class="totrow"><span>Bill total</span><span class="price" id="billTotal"></span></div>
+    <p class="check" id="check" hidden></p>
+
+    <div class="scan" id="scan" hidden>
+      <div class="scan-line"></div>
+      <div class="scan-t">Reading the bill</div>
+      <div class="scan-s" id="scanS">On your phone, nothing uploaded</div>
+      <button class="btn ghost" id="cancelBtn" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <div class="below">
+    <details class="photo" id="photoBox" hidden>
+      <summary>Show your photo</summary>
+      <div class="photos" id="photos"></div>
+    </details>
+    <button class="link" id="clearSel" type="button" hidden>Clear my items</button>
+  </div>
+  <textarea class="copy-fallback" id="copyFallback" readonly hidden aria-label="Your share, as text"></textarea>
+</div>
+
+<div class="bar" role="region" aria-label="Your share">
+  <div class="bar-in">
+    <div class="bar-txt">
+      <div class="owe-l">You owe</div>
+      <div class="owe" id="owe" aria-live="polite">£0.00</div>
+      <div class="owe-d" id="oweD">Tap the items you had</div>
+    </div>
+    <button class="btn copy" id="copyBtn" type="button" disabled>Copy</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const KEY = "billsplitter:v1";
+  const SYMS = { GBP: "£", EUR: "€", USD: "$", AUD: "$", CAD: "$", NZD: "$", JPY: "¥", CHF: "CHF ", SEK: "kr ", NOK: "kr ", DKK: "kr ", PLN: "zł ", INR: "₹" };
+  let uid = 1;
+  const nid = () => "i" + (uid++);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const num = (x) => {
+    if (typeof x === "number") return x;
+    const v = parseFloat(String(x ?? "").replace(/[^0-9.\-]/g, ""));
+    return v;
+  };
+
+  function makeExample() {
+    const it = (name, qty, total, sel = false) => ({ id: nid(), name, qty, total, sel, mine: qty, split: 1, open: false });
+    return {
+      example: true,
+      merchant: "The Old Bell, Wells",
+      symbol: "£",
+      items: [
+        it("Peroni Nastro Azzurro", 2, 11.60, true),
+        it("Lg Sauvignon Blanc", 1, 9.25),
+        it("Halloumi Fries", 1, 7.50),
+        it("Fish & Chips", 1, 17.95, true),
+        it("Steak & Ale Pie", 1, 16.50),
+        it("Beetroot Burger", 1, 15.00),
+        it("Sticky Toffee Pudding", 1, 7.25),
+        it("Sparkling Water 750ml", 1, 4.50)
+      ],
+      extras: [{ id: nid(), name: "Service charge 12.5%", amount: 11.19, kind: "service", on: true }],
+      billTotal: 100.74
+    };
+  }
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.items) && Array.isArray(s.extras)) {
+        s.items = s.items.map((i) => ({
+          id: nid(), name: String(i.name ?? ""), qty: Math.max(1, i.qty | 0), total: Number.isFinite(+i.total) ? +i.total : 0,
+          sel: !!i.sel, mine: Math.max(1, i.mine | 0), split: Math.max(1, i.split | 0), open: false
+        }));
+        s.extras = s.extras.map((e) => ({ id: nid(), name: String(e.name ?? ""), amount: Number.isFinite(+e.amount) ? +e.amount : 0, kind: e.kind || "other", on: e.on !== false }));
+        s.symbol = typeof s.symbol === "string" && s.symbol ? s.symbol : "£";
+        s.billTotal = s.billTotal != null && Number.isFinite(+s.billTotal) ? +s.billTotal : null;
+        return s;
+      }
+    } catch (_) {}
+    return null;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(bill)); } catch (_) {} }
+
+  let bill = load() || makeExample();
+  let editing = false;
+  let sample = null, maxCount = 1, ctl = null;
+
+  const fmt = (n) => {
+    const v = r2(Math.abs(n));
+    return (n < -0.004 ? "−" : "") + bill.symbol + v.toFixed(2);
+  };
+  const money = (n) => (n < -0.004 ? "−" : "") + r2(Math.abs(n)).toFixed(2);
+
+  function h(tag, props = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (typeof v === "boolean") el[k] = v;
+      else el.setAttribute(k, v);
+    }
+    for (const c of kids.flat()) {
+      if (c == null || c === false) continue;
+      el.append(c.nodeType ? c : document.createTextNode(String(c)));
+    }
+    return el;
+  }
+
+  function share(i) {
+    if (!i.sel) return 0;
+    const q = Math.max(1, i.qty);
+    return (+i.total || 0) * (Math.min(i.mine, q) / q) / Math.max(1, i.split);
+  }
+
+  function calc() {
+    const billSub = bill.items.reduce((s, i) => s + (+i.total || 0), 0);
+    let mySub = 0, count = 0;
+    for (const i of bill.items) if (i.sel) { count++; mySub += share(i); }
+    const ratio = billSub > 0 ? mySub / billSub : 0;
+    let extras = 0, allExtras = 0;
+    const ex = [];
+    for (const e of bill.extras) {
+      allExtras += +e.amount || 0;
+      if (!e.on) continue;
+      const v = (+e.amount || 0) * ratio;
+      extras += v;
+      ex.push({ e, v });
+    }
+    return { billSub, mySub, ratio, extras, ex, allExtras, count, owe: mySub + extras };
+  }
+
+  /* Rendering */
+  const itemsEl = $("#items"), extrasEl = $("#extras");
+
+  function stepper(label, out, f, i, lo, hi) {
+    return h("div", { class: "step" },
+      h("span", { class: "step-l" }, label),
+      h("button", { class: "sb", type: "button", "data-act": f + "-", "data-id": i.id, "data-k": f + "-" + i.id, "aria-label": "Fewer: " + label, disabled: lo }, "−"),
+      h("output", {}, out),
+      h("button", { class: "sb", type: "button", "data-act": f + "+", "data-id": i.id, "data-k": f + "+" + i.id, "aria-label": "More: " + label, disabled: hi }, "+")
+    );
+  }
+
+  function renderItems() {
+    itemsEl.replaceChildren();
+    for (const i of bill.items) {
+      if (editing) {
+        itemsEl.append(h("li", { class: "edit-row" },
+          h("input", { class: "fld num", id: "q-" + i.id, type: "number", inputmode: "numeric", min: "1", value: String(i.qty), "data-f": "qty", "data-id": i.id, "aria-label": "Quantity" }),
+          h("input", { class: "fld", id: "n-" + i.id, type: "text", value: i.name, placeholder: "Item", "data-f": "name", "data-id": i.id, "aria-label": "Item name" }),
+          h("input", { class: "fld num", id: "p-" + i.id, type: "text", inputmode: "decimal", value: money(i.total), "data-f": "total", "data-id": i.id, "aria-label": "Line price" }),
+          h("button", { class: "del", type: "button", "data-act": "del", "data-id": i.id, "aria-label": "Remove " + (i.name || "item") }, "×")
+        ));
+        continue;
+      }
+      const q = Math.max(1, i.qty);
+      const li = h("li", { class: "row" + (i.sel ? " sel" : "") },
+        h("button", { class: "line", type: "button", role: "checkbox", "aria-checked": String(!!i.sel), "data-act": "toggle", "data-id": i.id, "data-k": "t-" + i.id },
+          h("span", { class: "ck", "aria-hidden": "true" }),
+          h("span", { class: "name" }, q > 1 ? h("span", { class: "qty" }, q + "×") : null, h("span", { class: "mark" }, i.name || "Item")),
+          h("span", { class: "price" }, money(i.total))
+        )
+      );
+      if (i.sel) {
+        const mine = Math.min(i.mine, q);
+        const bits = [];
+        if (q > 1 && mine < q) bits.push(`${mine} of ${q}`);
+        if (i.split > 1) bits.push(`shared ${i.split} ways`);
+        const label = i.open ? "Done" : (bits.length ? bits.join(", ") : (q > 1 ? "Not all of them?" : "Shared it?"));
+        li.append(h("div", { class: "ctrls" },
+          h("button", { class: "link", type: "button", "data-act": "open", "data-id": i.id, "data-k": "o-" + i.id, "aria-expanded": String(!!i.open) }, label),
+          h("span", { class: "pen", "aria-label": "Your share " + fmt(share(i)) }, fmt(share(i)))
+        ));
+        if (i.open) {
+          const st = h("div", { class: "steps" });
+          if (q > 1) st.append(stepper("I had", `${mine} of ${q}`, "mine", i, mine <= 1, mine >= q));
+          st.append(stepper("Shared", i.split > 1 ? `${i.split} ways` : "no", "split", i, i.split <= 1, i.split >= 20));
+          li.append(st);
+        }
+      }
+      itemsEl.append(li);
+    }
+    if (!bill.items.length && !editing) {
+      itemsEl.append(h("li", { class: "sumrow" }, h("span", {}, "No items yet. Take a photo, or tap Edit to add them.")));
+    }
+  }
+
+  function renderExtras(c) {
+    extrasEl.replaceChildren();
+    for (const e of bill.extras) {
+      if (editing) {
+        extrasEl.append(h("li", { class: "edit-row x" },
+          h("input", { class: "fld", id: "en-" + e.id, type: "text", value: e.name, placeholder: "Service charge", "data-f": "name", "data-kind": "x", "data-id": e.id, "aria-label": "Charge name" }),
+          h("input", { class: "fld num", id: "ea-" + e.id, type: "text", inputmode: "decimal", value: money(e.amount), "data-f": "amount", "data-kind": "x", "data-id": e.id, "aria-label": "Amount, negative for a discount" }),
+          h("button", { class: "del", type: "button", "data-act": "del", "data-id": e.id, "aria-label": "Remove " + (e.name || "charge") }, "×")
+        ));
+        continue;
+      }
+      const v = (+e.amount || 0) * c.ratio;
+      extrasEl.append(h("li", { class: "extra" + (e.on ? "" : " off") },
+        h("label", { class: "sw" },
+          h("input", { type: "checkbox", id: "x-" + e.id, checked: !!e.on, "data-act": "extra", "data-id": e.id, "data-k": "x-" + e.id }),
+          h("span", { class: "sw-ui", "aria-hidden": "true" }),
+          h("span", { class: "ename" }, e.name || "Charge")
+        ),
+        e.on && c.count ? h("span", { class: "pen" }, fmt(v)) : null,
+        h("span", { class: "price" }, money(e.amount))
+      ));
+    }
+  }
+
+  function renderHead() {
+    const m = $("#merchant");
+    m.replaceChildren();
+    if (editing) {
+      m.append(h("input", { class: "fld merchant-in", id: "merchantIn", type: "text", value: bill.merchant || "", placeholder: "Restaurant", "aria-label": "Restaurant name" }));
+    } else {
+      m.textContent = bill.merchant || "Your bill";
+    }
+    $("#exTag").hidden = !bill.example;
+    $("#editBtn").textContent = editing ? "Done" : "Edit";
+    $("#itemTools").hidden = !editing;
+    $("#extraTools").hidden = !editing;
+    const bt = $("#billTotal");
+    bt.replaceChildren();
+    if (editing) {
+      bt.append(h("input", { class: "fld num tot-in", id: "totIn", type: "text", inputmode: "decimal", value: bill.billTotal == null ? "" : money(bill.billTotal), placeholder: "0.00", "aria-label": "Bill total as printed" }));
+    }
+  }
+
+  function updateTotals() {
+    const c = calc();
+    $("#sub").textContent = money(c.billSub);
+    const computed = c.billSub + c.allExtras;
+    if (!editing) $("#billTotal").textContent = bill.symbol + money(bill.billTotal ?? computed);
+    const chk = $("#check");
+    if (bill.billTotal != null && bill.items.length && Math.abs(computed - bill.billTotal) > 0.02) {
+      chk.hidden = false;
+      chk.textContent = `The lines add up to ${fmt(computed)} but the bill says ${fmt(bill.billTotal)}. A line may be missing or misread; tap Edit to fix it.`;
+    } else chk.hidden = true;
+
+    $("#owe").textContent = fmt(c.owe);
+    let d;
+    if (!c.count) d = bill.items.length ? "Tap the items you had" : "Add a bill to start";
+    else {
+      d = `${c.count} item${c.count === 1 ? "" : "s"}`;
+      if (c.extras > 0.004) {
+        const allService = c.ex.every((x) => x.e.kind === "service" || x.e.kind === "tip");
+        d += ` · incl. ${fmt(c.extras)} ${allService ? "service" : "charges"}`;
+      } else if (c.extras < -0.004) d += ` · after ${fmt(-c.extras)} off`;
+    }
+    $("#oweD").textContent = d;
+    $("#copyBtn").disabled = !c.count;
+    $("#clearSel").hidden = !c.count || editing;
+    return c;
+  }
+
+  function render() {
+    const key = document.activeElement?.dataset?.k;
+    const c = calc();
+    renderHead();
+    renderItems();
+    renderExtras(c);
+    updateTotals();
+    save();
+    if (key) {
+      const el = document.querySelector(`[data-k="${CSS.escape(key)}"]`);
+      if (el && !el.disabled) el.focus({ preventScroll: true });
+    }
+  }
+
+  /* Interaction */
+  itemsEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    const it = bill.items.find((x) => x.id === b.dataset.id);
+    if (!it) return;
+    const q = Math.max(1, it.qty);
+    switch (b.dataset.act) {
+      case "toggle": it.sel = !it.sel; if (!it.sel) it.open = false; break;
+      case "open": it.open = !it.open; break;
+      case "mine-": it.mine = Math.max(1, it.mine - 1); break;
+      case "mine+": it.mine = Math.min(q, it.mine + 1); break;
+      case "split-": it.split = Math.max(1, it.split - 1); break;
+      case "split+": it.split = Math.min(20, it.split + 1); break;
+      case "del": bill.items = bill.items.filter((x) => x !== it); break;
+    }
+    render();
+  });
+
+  extrasEl.addEventListener("click", (e) => {
+    const b = e.target.closest('[data-act="del"]');
+    if (!b) return;
+    bill.extras = bill.extras.filter((x) => x.id !== b.dataset.id);
+    render();
+  });
+  extrasEl.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.act !== "extra") return;
+    const x = bill.extras.find((x) => x.id === t.dataset.id);
+    if (x) { x.on = t.checked; render(); }
+  });
+
+  function onEditInput(e) {
+    const t = e.target;
+    const f = t.dataset.f;
+    if (!f) return;
+    const list = t.dataset.kind === "x" ? bill.extras : bill.items;
+    const o = list.find((x) => x.id === t.dataset.id);
+    if (!o) return;
+    if (f === "name") o.name = t.value;
+    else if (f === "qty") { const was = o.qty; o.qty = Math.max(1, parseInt(t.value, 10) || 1); o.mine = o.mine >= was ? o.qty : Math.min(o.mine, o.qty); }
+    else if (f === "total") o.total = r2(num(t.value) || 0);
+    else if (f === "amount") o.amount = r2(num(t.value) || 0);
+    bill.example = false;
+    updateTotals(); save();
+  }
+  itemsEl.addEventListener("input", onEditInput);
+  extrasEl.addEventListener("input", onEditInput);
+  $("#paper").addEventListener("input", (e) => {
+    if (e.target.id === "merchantIn") { bill.merchant = e.target.value; bill.example = false; save(); }
+    if (e.target.id === "totIn") {
+      const v = num(e.target.value);
+      bill.billTotal = e.target.value.trim() === "" || !Number.isFinite(v) ? null : r2(v);
+      bill.example = false;
+      updateTotals(); save();
+    }
+  });
+
+  $("#editBtn").addEventListener("click", () => {
+    editing = !editing;
+    if (!editing) bill.items.forEach((i) => { if (!i.name.trim()) i.name = "Item"; });
+    render();
+  });
+  $("#addItem").addEventListener("click", () => {
+    const it = { id: nid(), name: "", qty: 1, total: 0, sel: false, mine: 1, split: 1, open: false };
+    bill.items.push(it); bill.example = false;
+    render();
+    document.getElementById("n-" + it.id)?.focus();
+  });
+  $("#addExtra").addEventListener("click", () => {
+    const x = { id: nid(), name: "", amount: 0, kind: "other", on: true };
+    bill.extras.push(x); bill.example = false;
+    render();
+    document.getElementById("en-" + x.id)?.focus();
+  });
+  let clearArmed = null;
+  $("#clearBill").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    if (!clearArmed) {
+      b.textContent = "Tap again to clear";
+      clearArmed = setTimeout(() => { b.textContent = "Clear bill"; clearArmed = null; }, 3000);
+      return;
+    }
+    clearTimeout(clearArmed); clearArmed = null; b.textContent = "Clear bill";
+    bill = { example: false, merchant: "", symbol: bill.symbol, items: [], extras: [], billTotal: null };
+    $("#photoBox").hidden = true;
+    render();
+  });
+  $("#clearSel").addEventListener("click", () => {
+    bill.items.forEach((i) => { i.sel = false; i.mine = i.qty; i.split = 1; i.open = false; });
+    render();
+  });
+
+  /* Copy */
+  function shareText() {
+    const c = calc();
+    const lines = [`My share${bill.merchant ? " at " + bill.merchant : ""}`];
+    for (const i of bill.items) {
+      if (!i.sel) continue;
+      const q = Math.max(1, i.qty);
+      const parts = [];
+      if (q > 1) parts.push(`${Math.min(i.mine, q)} of ${q}`);
+      if (i.split > 1) parts.push(`split ${i.split} ways`);
+      lines.push(`${i.name || "Item"}${parts.length ? " (" + parts.join(", ") + ")" : ""}: ${fmt(share(i))}`);
+    }
+    for (const { e, v } of c.ex) lines.push(`${e.name || "Charge"} (my share): ${fmt(v)}`);
+    lines.push(`Total: ${fmt(c.owe)}`);
+    return lines.join("\n");
+  }
+  $("#copyBtn").addEventListener("click", (e) => {
+    const b = e.currentTarget;
+    const text = shareText();
+    const done = () => { b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy"; }, 1600); };
+    const fallback = () => {
+      const ta = $("#copyFallback");
+      ta.value = text; ta.hidden = false; ta.focus(); ta.select();
+      setNote("Copying isn't allowed here. Select the text below and copy it.", false);
+    };
+    try {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } catch (_) { fallback(); }
+  });
+
+  /* Photo reading */
+  function setNote(msg, err) {
+    const n = $("#note");
+    n.textContent = msg;
+    n.classList.toggle("err", !!err);
+  }
+
+  function promptFor(n) {
+    const many = n > 1;
+    return `The attached image${many ? "s are photos" : " is a photo"} of a restaurant, bar or shop bill. Read it and list what was charged.
+
+Reply with only a JSON object in this shape:
+{"merchant": "Name on the bill, or null", "currency": "ISO code such as GBP", "symbol": "£", "items": [{"name": "Fish & Chips", "qty": 1, "total": 17.95}], "extras": [{"name": "Service charge 12.5%", "amount": 11.19, "kind": "service"}], "billTotal": 100.74}
+
+Rules:
+- One entry in "items" per charged line, in the order printed. "total" is the line's full price as printed (quantity times unit price), as a number.
+- If a line shows a quantity (for example "2 Peroni" or "2 x Peroni"), put it in "qty" and leave the number out of the name. Keep names short and readable, expanding obvious till abbreviations.
+- Fold zero-priced modifiers (for example "no onions", "medium rare") into the parent item's name in brackets. Modifiers with their own price are separate items.
+- "extras" holds charges or reductions applied to the whole bill: service charge, a tip already added, tax added on top of prices, discounts or vouchers. Discounts use negative amounts. "kind" is one of "service", "tax", "tip", "discount", "other".
+- Leave out VAT or tax lines that are only informational because prices already include it.
+- Never include subtotal, total, balance due, payment, card, cash or change lines in items or extras.
+- "billTotal" is the final amount due as printed, or null if you can't see it.
+- If ${many ? "these are" : "this is"} not a bill or receipt, reply {"error": "short reason"}.`;
+  }
+
+  function normalise(r) {
+    if (!r || typeof r !== "object" || Array.isArray(r)) throw { code: "invalid_json" };
+    if (r.error) throw { code: "not_bill" };
+    const symRaw = typeof r.symbol === "string" ? r.symbol.trim() : "";
+    const symbol = symRaw && symRaw.length <= 4 ? (symRaw.length > 1 && /^[A-Za-z]/.test(symRaw) ? symRaw + " " : symRaw) : (SYMS[String(r.currency || "").toUpperCase()] || "£");
+    const items = (Array.isArray(r.items) ? r.items : []).map((x) => ({
+      id: nid(),
+      name: String(x?.name ?? "Item").trim().slice(0, 80) || "Item",
+      qty: Math.max(1, Math.round(+x?.qty || 1)),
+      total: r2(num(x?.total)),
+      sel: false, mine: 1, split: 1, open: false
+    })).filter((x) => Number.isFinite(x.total));
+    items.forEach((x) => { x.mine = x.qty; });
+    if (!items.length) throw { code: "no_items" };
+    const kinds = ["service", "tax", "tip", "discount", "other"];
+    const extras = (Array.isArray(r.extras) ? r.extras : []).map((x) => ({
+      id: nid(),
+      name: String(x?.name ?? "Charge").trim().slice(0, 60) || "Charge",
+      amount: r2(num(x?.amount)),
+      kind: kinds.includes(x?.kind) ? x.kind : "other",
+      on: true
+    })).filter((x) => Number.isFinite(x.amount) && x.amount !== 0);
+    const bt = r.billTotal != null ? num(r.billTotal) : NaN;
+    return {
+      example: false,
+      merchant: r.merchant ? String(r.merchant).trim().slice(0, 60) : "",
+      symbol,
+      items, extras,
+      billTotal: Number.isFinite(bt) ? r2(bt) : null
+    };
+  }
+
+  const ERRS = {
+    rate_limited: "Too many requests just now. Wait a minute and try again.",
+    image_rejected: "That photo couldn't be opened. Try a JPEG or PNG under 20 MB.",
+    invalid_json: "Couldn't make out the items. Try a sharper, flatter photo with the whole bill in frame.",
+    empty_completion: "Couldn't make out the items. Try a sharper, flatter photo with the whole bill in frame.",
+    refused: "Couldn't read that photo. Try another one.",
+    no_items: "No priced items found. Make sure the whole bill is in frame and try again.",
+    not_bill: "That doesn't look like a bill. Try another photo.",
+    session_expired: "You've been signed out of Claude. Sign in again, then retry.",
+    prompt_too_large: "That's too much at once. Try one photo."
+  };
+  const PERMANENT = ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed", "images_unavailable"];
+
+  /* Free reader: runs on the phone, no Claude usage */
+  let ocrWorker = null, ocrLoading = null, cancelled = false, lastFiles = [];
+  const TESS = "ocr/";
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = src; el.onload = res; el.onerror = () => rej(new Error("script"));
+      document.head.append(el);
+    });
+  }
+  async function getWorker(onStatus) {
+    if (ocrWorker) return ocrWorker;
+    if (!ocrLoading) ocrLoading = (async () => {
+      if (!window.Tesseract) await loadScript(TESS + "tesseract.min.js");
+      const resp = await fetch("ocr/eng.wasm");
+      if (!resp.ok) throw new Error("lang " + resp.status);
+      const langData = new Uint8Array(await resp.arrayBuffer());
+      let simd = false;
+      try { simd = WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); } catch (_) {}
+      const abs = (f) => new URL("ocr/" + f, document.baseURI).href;
+      const w = await Tesseract.createWorker([{ code: "eng", data: langData }], 1, {
+        workerPath: abs("worker.js"),
+        workerBlobURL: false,
+        corePath: abs(simd ? "core-simd-lstm.js" : "core-lstm.js"),
+        cacheMethod: "none",
+        logger: (m) => statusFn && statusFn(m)
+      });
+      await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+      return w;
+    })();
+    try { ocrWorker = await ocrLoading; } finally { ocrLoading = null; }
+    return ocrWorker;
+  }
+  let statusFn = null;
+  async function loadBitmap(file) {
+    try { return await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch (_) { return await createImageBitmap(file); }
+  }
+  function paperBox(bmp) {
+    const s = Math.min(1, 600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(bmp.width * s)); c.height = Math.max(1, Math.round(bmp.height * s));
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0, c.width, c.height);
+    const r = findPaper(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+    return { sx: r.x * bmp.width, sy: r.y * bmp.height, sw: r.w * bmp.width, sh: r.h * bmp.height };
+  }
+  function renderCrop(bmp, box, width) {
+    let h = Math.round(box.sh * width / box.sw);
+    if (h > 12000) { width = Math.round(width * 12000 / h); h = 12000; }
+    const c = document.createElement("canvas");
+    c.width = width; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.drawImage(bmp, box.sx, box.sy, box.sw, box.sh, 0, 0, width, h);
+    const id = g.getImageData(0, 0, width, h);
+    stretchGray(id.data);
+    g.putImageData(id, 0, 0);
+    return c;
+  }
+
+
+  // Turns OCR text from a receipt into {merchant, symbol, items, extras, billTotal}.
+  function parseReceipt(text) {
+    const PRICE = /([-−–]?)\s*([£€$])?\s*(\d{1,4}(?:[ ,]\d{3})*[.,]\s?\d{2})(?!\d)/g;
+    const SKIP = /\b(sub\s*-?\s*total|net|vat|tax\s*incl|incl\.?\s*vat|card|visa|master\s*card|mastercard|amex|maestro|debit|credit|contactless|cash|change|tender(ed)?|paid|payment|auth|approved|balance\s*(brought|b\/f)|rounding|before\s*sav|savings?\b|covers?|table|server|receipt|invoice|tel\b|phone|www\.|thank)/i;
+    const TOTAL = /\b(grand\s*total|total\s*(due|to\s*pay)?|amount\s*due|balance\s*due|to\s*pay|bill\s*total)\b/i;
+    const SERVICE = /\b(service|serv\.?\s*ch|svc|optional\s*charge)\b/i;
+    const TIP = /\b(tip|gratuity)\b/i;
+    const DISCOUNT = /\b(discount|voucher|promo|offer|off\b|deal|loyalty|staff\s*disc)/i;
+    const TAXADD = /\b(sales\s*tax|tax)\b/i;
+
+    const symCount = { "£": 0, "€": 0, "$": 0 };
+    for (const ch of text) if (ch in symCount) symCount[ch]++;
+    let symbol = "£";
+    const best = Object.entries(symCount).sort((a, b) => b[1] - a[1])[0];
+    if (best[1] > 0) symbol = best[0];
+
+    const toNum = (s) => {
+      let t = s.replace(/\s/g, "");
+      // 1,234.56 or 1.234,56 or 11,60
+      if (/,\d{2}$/.test(t)) t = t.replace(/\./g, "").replace(",", ".");
+      else t = t.replace(/,/g, "");
+      return parseFloat(t);
+    };
+    const clean = (s) => s
+      .replace(/[|_~*=#<>{}\[\]]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^[\s.:;,\-–+*]+|[\s.:;,\-–+*]+$/g, "")
+      .trim();
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+    const letters = (s) => (s.match(/[A-Za-z]/g) || []).length;
+
+    const raw = text.split(/\r?\n/).map((l) => l.replace(/\s+$/, ""));
+    const items = [], extras = [];
+    let billTotal = null, merchant = "", pendingName = "", seenItem = false, afterTotal = false;
+
+    for (let li = 0; li < raw.length; li++) {
+      const line = raw[li].replace(/([£€$]\s?\d{1,4})\s?:\s?(\d{2})(?!\d)/g, "$1.$2");
+      if (!line.trim()) continue;
+      const matches = [...line.matchAll(PRICE)];
+      if (!matches.length) {
+        const t = clean(line);
+        if (!seenItem && !merchant && letters(t) >= 3 && !SKIP.test(t)) merchant = t;
+        // Possible item name whose price is on the next line, or a modifier line
+        if (letters(t) >= 2 && !SKIP.test(t) && !TOTAL.test(t)) {
+          const tidy = t.replace(/\s/g, "");
+          const wordy = tidy.length >= 3 && letters(t) / tidy.length >= 0.8 && t.length <= 40;
+          if (seenItem && wordy && /^\s{2,}\S|^[\s\-+*]*(no|add|extra|with|without|sub|side|w\/)\b/i.test(line) && items.length) {
+            const last = items[items.length - 1];
+            if (last.name.length < 60) last.name += " (" + t.replace(/^[\-+*\s]+/, "") + ")";
+            pendingName = "";
+          } else pendingName = t;
+        } else pendingName = "";
+        continue;
+      }
+      const m = matches[matches.length - 1];
+      const neg = !!m[1] || /^[-−–]/.test(line.slice(m.index + m[0].length)) || /\(\s*[£€$]?\d+[.,]\d{2}\s*\)/.test(line);
+      let value = toNum(m[3]) * (neg ? -1 : 1);
+      let label = line.slice(0, m.index);
+      // A line like "2 @ 5.80 11.60": drop the unit price, read qty
+      let qty = 1;
+      const at = label.match(/(\d{1,2})\s*[@xX×]\s*[£€$]?\s*\d{1,4}[.,]\d{2}\s*$/);
+      if (at) { qty = +at[1]; label = label.slice(0, at.index); }
+      label = label.replace(PRICE, " ");
+      const starred = /\*/.test(label);
+      let name = clean(label.replace(/\s[A-Z]$/, ""))
+        .replace(/^[^A-Za-z0-9]+/, "")
+        .replace(/^\d{5,}\s*/, "")
+        .replace(/^[^A-Za-z0-9]+/, "")
+        .replace(/(\s+[^A-Za-z0-9\s]{1,2})+$/, "");
+      if (starred) name = name.replace(/^x{1,3}(?=[A-Z])/, "").replace(/(?<=\S)x{1,3}$/, "").trim();
+      const lead = name.match(/^(\d{1,2})\s*[xX×]?\s+(?=[A-Za-z])/);
+      if (lead) { qty = +lead[1]; name = name.slice(lead[0].length); }
+      const trail = name.match(/\s[xX×]\s?(\d{1,2})$/);
+      if (trail) { qty = +trail[1]; name = name.slice(0, trail.index); }
+      if (letters(name) < 2 && pendingName) { name = pendingName; }
+      pendingName = "";
+      name = clean(name);
+      if (!Number.isFinite(value)) continue;
+
+      if (TOTAL.test(name) && !/sub/i.test(name)) {
+        if (billTotal == null) billTotal = Math.abs(value);
+        afterTotal = true;
+        continue;
+      }
+      if (afterTotal && !TIP.test(name)) continue; // payments, VAT breakdowns, savings after the total
+      if (SERVICE.test(name)) { extras.push({ name, amount: value, kind: "service" }); continue; }
+      if (TIP.test(name)) { extras.push({ name, amount: value, kind: "tip" }); continue; }
+      if (DISCOUNT.test(name) || (value < 0 && seenItem)) { extras.push({ name: name || "Discount", amount: -Math.abs(value), kind: "discount" }); continue; }
+      if (SKIP.test(name)) continue;
+      if (TAXADD.test(name) && seenItem) { extras.push({ name, amount: value, kind: "tax" }); continue; }
+      if (letters(name) < 2 || value === 0) continue;
+      items.push({ name: cap(name), qty, total: Math.round(value * 100) / 100 });
+      seenItem = true;
+    }
+    if (!seenItem) merchant = merchant || "";
+    return { merchant, symbol, items, extras, billTotal };
+  }
+
+  // Finds the receipt paper in a photo. px: RGBA bytes at a small analysis size.
+  function findPaper(px, w, h) {
+    const n = w * h, gray = new Uint8Array(n), sat = new Uint8Array(n), hist = new Uint32Array(256);
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const r = px[j], g = px[j + 1], b = px[j + 2];
+      const v = (r + g + b) / 3 | 0;
+      gray[i] = v; sat[i] = Math.max(r, g, b) - Math.min(r, g, b); hist[v]++;
+    }
+    // Otsu threshold, kept above 140 so shadowed wood or desk doesn't count as paper
+    let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+    let sB = 0, wB = 0, best = 0, T = 170;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t]; if (!wB) continue;
+      const wF = n - wB; if (!wF) break;
+      sB += t * hist[t];
+      const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
+      if (v > best) { best = v; T = t; }
+    }
+    T = Math.max(140, T);
+    const bright = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bright[i] = gray[i] > T && sat[i] < 45 ? 1 : 0;
+    const run = (prof, thr, gapFrac) => {
+      const runs = []; let s = -1;
+      for (let i = 0; i <= prof.length; i++) {
+        const on = i < prof.length && prof[i] > thr;
+        if (on && s < 0) s = i;
+        if (!on && s >= 0) { runs.push([s, i]); s = -1; }
+      }
+      const gap = Math.max(2, Math.round(prof.length * gapFrac)), m = [];
+      for (const r of runs) { if (m.length && r[0] - m[m.length - 1][1] <= gap) m[m.length - 1][1] = r[1]; else m.push(r); }
+      return m.length ? m.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a)) : [0, prof.length];
+    };
+    const cf = new Float32Array(w);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cf[x] += bright[y * w + x];
+    let mx = 0; for (let x = 0; x < w; x++) { cf[x] /= h; mx = Math.max(mx, cf[x]); }
+    let [x0, x1] = run(cf, 0.5 * mx, 0.005);
+    const rf = new Float32Array(h);
+    for (let y = 0; y < h; y++) { let c = 0; for (let x = x0; x < x1; x++) c += bright[y * w + x]; rf[y] = c / Math.max(1, x1 - x0); }
+    let [y0, y1] = run(rf, 0.35, 0.03);
+    const pad = Math.round(w * 0.01);
+    x0 = Math.max(0, x0 - pad); x1 = Math.min(w, x1 + pad); y0 = Math.max(0, y0 - pad); y1 = Math.min(h, y1 + pad);
+    if ((x1 - x0) * (y1 - y0) < 0.06 * n || (x1 - x0) < w * 0.12) return { x: 0, y: 0, w: 1, h: 1 };
+    return { x: x0 / w, y: y0 / h, w: (x1 - x0) / w, h: (y1 - y0) / h };
+  }
+  // Greyscale plus contrast stretch, in place on RGBA bytes.
+  function stretchGray(px) {
+    const n = px.length / 4, hist = new Uint32Array(256);
+    for (let j = 0; j < px.length; j += 4) { const v = (px[j] + px[j + 1] + px[j + 2]) / 3 | 0; px[j] = v; hist[v]++; }
+    let lo = 0, hi = 255, acc = 0;
+    for (let t = 0; t < 256; t++) { acc += hist[t]; if (acc >= n * 0.02) { lo = t; break; } }
+    acc = 0;
+    for (let t = 255; t >= 0; t--) { acc += hist[t]; if (acc >= n * 0.02) { hi = t; break; } }
+    const k = 255 / Math.max(1, hi - lo);
+    for (let j = 0; j < px.length; j += 4) { const v = Math.max(0, Math.min(255, (px[j] - lo) * k)); px[j] = px[j + 1] = px[j + 2] = v; }
+  }
+
+  function showPhotos(files) {
+    const ph = $("#photos");
+    ph.querySelectorAll("img").forEach((img) => URL.revokeObjectURL(img.src));
+    ph.replaceChildren(...files.map((f) => h("img", { src: URL.createObjectURL(f), alt: "Photo of the bill" })));
+    $("#photoBox").hidden = false;
+    $("#photoBox").open = false;
+  }
+  function busy(on, sub) {
+    $("#scan").hidden = !on;
+    $("#scanS").textContent = sub || "";
+    $("#snapBtn").disabled = $("#pickBtn").disabled = on;
+    $("#claudeBtn").disabled = on;
+  }
+  function found() {
+    const n = bill.items.length;
+    return `Found ${n} item${n === 1 ? "" : "s"}. Tick the ones you had, and check them against your photo; Edit fixes anything misread.`;
+  }
+
+  async function scanFree(fileList) {
+    const files = [...fileList].slice(0, 4);
+    if (!files.length) return;
+    lastFiles = files;
+    $("#copyFallback").hidden = true;
+    cancelled = false;
+    busy(true, "Starting the reader");
+    let passLabel = "Reading text";
+    statusFn = (m) => {
+      if (m.status === "recognizing text") $("#scanS").textContent = `${passLabel} ${Math.round((m.progress || 0) * 100)}%`;
+      else if (/load/.test(m.status || "")) $("#scanS").textContent = "Loading the reader, first time takes longest";
+    };
+    try {
+      const bitmaps = [];
+      for (const f of files) bitmaps.push(await loadBitmap(f));
+      const boxes = bitmaps.map(paperBox);
+      const w = await getWorker();
+      const sizes = [1100, 900, 1400];
+      let best = null;
+      for (let p = 0; p < sizes.length; p++) {
+        passLabel = p ? `Double-checking (${p + 1} of ${sizes.length})` : "Reading text";
+        let text = "";
+        for (let k = 0; k < bitmaps.length; k++) {
+          if (cancelled) return;
+          const { data } = await w.recognize(renderCrop(bitmaps[k], boxes[k], sizes[p]));
+          text += data.text + "\n";
+        }
+        if (cancelled) return;
+        const r = parseReceipt(text);
+        const sum = r.items.reduce((a, i) => a + i.total, 0) + r.extras.reduce((a, e) => a + e.amount, 0);
+        const off = r.billTotal != null ? Math.abs(sum - r.billTotal) : Infinity;
+        const cand = { r, off, n: r.items.length };
+        if (!best || cand.off < best.off - 0.02 || (Math.abs(cand.off - best.off) <= 0.02 && cand.n > best.n)) best = cand;
+        if (best.off <= 0.02) break;
+        if (r.billTotal == null && best.n >= 2) break; // nothing to check against
+      }
+      if (!best || !best.r.items.length) throw { code: "no_items" };
+      bill = normalise(best.r);
+      editing = false;
+      showPhotos(files);
+      render();
+      setNote(best.off <= 0.02 || !Number.isFinite(best.off)
+        ? found()
+        : found() + " Some lines don't add up to the bill total, so a few may be misread.", false);
+    } catch (e) {
+      if (cancelled) return;
+      const code = e && e.code;
+      if (code === "no_items") setNote("Couldn't find any priced items. Try a flatter, well-lit photo with the whole bill in frame, or read it with Claude.", true);
+      else if ((e && e.name === "InvalidStateError") || /decode|bitmap|source image/i.test(String(e && e.message))) setNote("That photo format couldn't be opened. Try a JPEG or a screenshot.", true);
+      else { ocrWorker = null; setNote("The free reader couldn't start here. You can read the bill with Claude instead, or tap Edit to type it in.", true); }
+    } finally {
+      if (!cancelled) busy(false);
+      statusFn = null;
+      $("#alt").hidden = !(sample && lastFiles.length);
+    }
+  }
+
+  async function scanClaude() {
+    const files = lastFiles.slice(0, maxCount);
+    if (!files.length || !sample) return;
+    $("#copyFallback").hidden = true;
+    busy(true, "Claude is reading it, usually 10 to 30 seconds");
+    ctl = new AbortController();
+    try {
+      const res = await sample.json(promptFor(files.length), { images: files, signal: ctl.signal, modelTier: "default" });
+      bill = normalise(res);
+      editing = false;
+      showPhotos(files);
+      render();
+      setNote(found(), false);
+      $("#alt").hidden = true;
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "cancelled") setNote("Cancelled. Your previous bill is still here.", false);
+      else if (PERMANENT.includes(code)) { sample = null; $("#alt").hidden = true; setNote(code === "not_granted" ? "Claude wasn't given permission, so only the free reader is available. Tap Edit to fix any misreads." : "Reading with Claude isn't available here. Tap Edit to fix any misreads.", true); }
+      else setNote(ERRS[code] || "Something went wrong reading the bill. Try again.", true);
+    } finally {
+      busy(false);
+      ctl = null;
+    }
+  }
+
+  $("#snapBtn").addEventListener("click", () => $("#snapIn").click());
+  $("#pickBtn").addEventListener("click", () => $("#pickIn").click());
+  $("#claudeBtn").addEventListener("click", scanClaude);
+  $("#cancelBtn").addEventListener("click", () => {
+    if (ctl) { ctl.abort(); return; }
+    cancelled = true;
+    try { ocrWorker && ocrWorker.terminate(); } catch (_) {}
+    ocrWorker = null;
+    busy(false);
+    setNote("Cancelled. Your previous bill is still here.", false);
+  });
+  for (const id of ["#snapIn", "#pickIn"]) {
+    $(id).addEventListener("change", (e) => {
+      const fl = e.target.files;
+      scanFree(fl ? [...fl] : []);
+      e.target.value = "";
+    });
+  }
+
+  $("#snapBtn").disabled = $("#pickBtn").disabled = false;
+  (async () => {
+    if (!window.claude || typeof window.claude.use !== "function") return;
+    let sm = null;
+    try { sm = await window.claude.use("sample"); } catch (_) {}
+    if (!sm) return;
+    const lim = await sm.limits().catch(() => null);
+    if (!lim || !lim.images) return;
+    sample = sm;
+    maxCount = Math.max(1, lim.images.maxCount || 1);
+    $("#alt").hidden = !lastFiles.length;
+  })();
+
+  if (!bill.example) setNote("Your last bill is below. Tick the items you had, or take a new photo to replace it.", false);
+  render();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
