@@ -257,7 +257,7 @@
     </details>
     <button class="link" id="clearSel" type="button" hidden>Clear my items</button>
   </div>
-  <p class="ver">Splitsville · version 10</p>
+  <p class="ver">Splitsville · version 11</p>
   <textarea class="copy-fallback" id="copyFallback" readonly hidden aria-label="Your share, as text"></textarea>
 </div>
 
@@ -764,7 +764,17 @@ Rules:
     c.width = width; c.height = h;
     const g = c.getContext("2d", { willReadFrequently: true });
     g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-    g.drawImage(bmp, box.sx, box.sy, box.sw, box.sh, 0, 0, width, h);
+    // Shrink in halves first: one big downscale makes text jagged (5s read as 9s)
+    let src = bmp, sx = box.sx, sy = box.sy, sw = box.sw, sh = box.sh;
+    while (sw > width * 2) {
+      const t = document.createElement("canvas");
+      t.width = Math.round(sw / 2); t.height = Math.round(sh / 2);
+      const tg = t.getContext("2d");
+      tg.imageSmoothingEnabled = true; tg.imageSmoothingQuality = "high";
+      tg.drawImage(src, sx, sy, sw, sh, 0, 0, t.width, t.height);
+      src = t; sx = 0; sy = 0; sw = t.width; sh = t.height;
+    }
+    g.drawImage(src, sx, sy, sw, sh, 0, 0, width, h);
     const id = g.getImageData(0, 0, width, h);
     stretchGray(id.data, mode);
     g.putImageData(id, 0, 0);
@@ -960,7 +970,13 @@ Rules:
       for (const c of g) { const k = cents(c.total); const v = votes.get(k) || { n: 0, conf: 0 }; v.n++; v.conf = Math.max(v.conf, c.conf || 0); votes.set(k, v); }
       let bestK = null, bestV = null;
       for (const [k, v] of votes) if (!bestV || v.n > bestV.n || (v.n === bestV.n && v.conf > bestV.conf)) { bestK = k; bestV = v; }
-      const named = g.reduce((a, c) => ((c.conf || 0) > (a.conf || 0) ? c : a), g[0]);
+      // Name by consensus: the version most like the others, weighted by how sure each reading was
+      let named = g[0], bestScore = -1;
+      for (const c of g) {
+        let sc = (c.conf || 0) * 0.5;
+        for (const o of g) if (o !== c) sc += (o.conf || 0) * sim(c.name, o.name);
+        if (sc > bestScore) { bestScore = sc; named = c; }
+      }
       return { name: named.name, qty: named.qty, conf: named.conf, total: bestK / 100, votes: bestV.n, alts: [...votes.entries()].filter(([k]) => k !== bestK).map(([k, v]) => ({ v: k / 100, n: v.n })) };
     });
 
