@@ -1,4 +1,4 @@
-# Bill Splitter
+# Splitsville
 
 Photograph a bill, tick the items you had, and see what you owe, including your fair share of any service charge or discount.
 

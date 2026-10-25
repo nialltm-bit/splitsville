@@ -8,13 +8,13 @@
 <meta name="theme-color" content="#0e172d" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Bill Splitter">
+<meta name="apple-mobile-web-app-title" content="Splitsville">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>Bill Splitter</title>
+<title>Splitsville</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap">
@@ -68,8 +68,9 @@
   header { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-left: 22%; }
   h1 {
     margin: 0; font-weight: 900; font-stretch: 125%; text-transform: uppercase;
-    font-size: clamp(2.3rem, 11vw, 3.4rem); line-height: .86; letter-spacing: -.01em;
+    font-size: clamp(2.8rem, 15vw, 4.4rem); line-height: .84; letter-spacing: -.015em;
   }
+  h1 span { display: block; }
   .lede { margin: 0; font-size: .95rem; font-weight: 500; max-width: 30ch; }
 
   .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -201,7 +202,7 @@
 <div class="bars" aria-hidden="true"></div>
 <div class="wrap">
   <header>
-    <h1>Bill Splitter</h1>
+    <h1 aria-label="Splitsville"><span aria-hidden="true">Splits</span><span aria-hidden="true">ville</span></h1>
     <p class="lede">Photograph the bill, tick what you had, and see exactly what you owe.</p>
   </header>
 
