@@ -1,5 +1,5 @@
 // Offline support: keeps the app and its text reader on the phone after first use.
-const CACHE = "splitsville-v16";
+const CACHE = "splitsville-v17";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,6 +11,8 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // Only handle this site and its fonts; anything else (like the visitor counter) goes straight to the network
+  if (url.origin !== location.origin && !/fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) return;
   const isPage = req.mode === "navigate";
   // Pages: network first so updates arrive; everything else: cache first.
   if (isPage) {

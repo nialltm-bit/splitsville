@@ -338,7 +338,7 @@
     </details>
     <button class="link" id="clearSel" type="button" hidden>Clear my items</button>
   </div>
-  <p class="ver">Splitsville · version 16</p>
+  <p class="ver">Splitsville · version 17</p>
   <textarea class="copy-fallback" id="copyFallback" readonly hidden aria-label="Your share, as text"></textarea>
 </div>
 
@@ -466,6 +466,11 @@
     bill = b; editing = false; addingPerson = false;
   }
   const adoptParsed = (parsed) => adopt(freshBill(parsed));
+
+  /* Anonymous usage counts: just "this happened", nothing about who */
+  function track(name) {
+    try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: name, title: name, event: true }); } catch (_) {}
+  }
 
   /* Money */
   const fmt = (n) => (n < -0.004 ? "−" : "") + bill.symbol + r2(Math.abs(n)).toFixed(2);
@@ -972,6 +977,7 @@
     if (name) {
       const p = person(name, nextShape(bill));
       bill.people.push(p);
+      if (bill.people.length === 2 && !bill.example) track("split-with-people");
       bill.active = p.id;
     }
     render();
@@ -1708,6 +1714,7 @@ Rules:
   }
   function found() {
     renderHistory();
+    track("bill-scanned");
     const n = bill.items.length;
     return `Found ${n} item${n === 1 ? "" : "s"}. Tick the ones you had, or add people and tick for each of them. Check the lines against your photo; Edit fixes anything misread.`;
   }
@@ -1864,6 +1871,28 @@ Rules:
   if (!bill.example) setNote("Your last bill is below. Tick the items you had, or take a new photo to start a new one.", false);
   if (USE_PADDLE && !paddleReady()) $("#note").textContent += " The first scan downloads the reader once (about 25 MB), so Wi-Fi is best.";
   render(); renderHistory();
+})();
+</script>
+<script>
+/* Visitor counts: GoatCounter, no cookies, no personal data. Open the site with ?not-me once to stop counting this device. */
+(function () {
+  var KEY = "splitsville:not-me", q = location.search, skip = false, msg = "";
+  try {
+    if (/[?&]not-me(&|=|$)/.test(q)) { localStorage.setItem(KEY, "1"); msg = "This device won't be counted in visitor numbers."; }
+    if (/[?&]count-me(&|=|$)/.test(q)) { localStorage.removeItem(KEY); msg = "This device will be counted in visitor numbers again."; }
+    skip = localStorage.getItem(KEY) === "1";
+  } catch (e) {}
+  if (msg) {
+    try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
+    var n = document.getElementById("note"); if (n) n.textContent = msg;
+  }
+  if (skip) return;
+  window.goatcounter = { path: function () { return location.pathname; } };
+  var s = document.createElement("script");
+  s.async = true;
+  s.src = "https://gc.zgo.at/count.js";
+  s.setAttribute("data-goatcounter", "https://splitsville.goatcounter.com/count");
+  document.body.appendChild(s);
 })();
 </script>
 <script>
