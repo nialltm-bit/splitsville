@@ -1,10 +1,13 @@
 # Splitsville
 
-Photograph a bill, tick the items you had, and see what you owe, including your fair share of any service charge or discount.
+Photograph a bill, tick what everyone had, and see exactly who owes what.
 
-- Reads the receipt on your phone. Nothing is uploaded, no account, no cost.
-- Tick your items; split shared ones between any number of people.
-- Copy your share as text to paste into the group chat.
+- **Reads the receipt on your phone.** Nothing is uploaded, there's no account, and it costs nothing.
+- **Split it as a group.** Add people, tick items for each of them, and share items between people. The shares always add up to the bill to the penny, with anything nobody has claimed shown separately.
+- **Service, discounts and tips** are shared in proportion to what each person had. You can also just split the whole bill equally.
+- **Send the bill to friends.** A link (or QR code) carries the bill itself. Friends pick their name, tick what they had, and send their items back to you.
+- **Get paid.** Add your Monzo or PayPal username once and friends get a button that opens the app with their amount filled in. Tick people off as they pay.
+- **Past bills** stay on your phone, with who has paid.
 - Works offline once opened, and can be added to your home screen.
 
 ## Install on your phone
